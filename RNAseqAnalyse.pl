@@ -4,6 +4,7 @@ use warnings;
 use POSIX qw(tmpnam);
 use Getopt::Long;
 use File::Basename;
+use File::Path qw(make_path);
 
 ## ======================================
 ## Usage: see -h
@@ -177,7 +178,7 @@ foreach my $f (@samplefiles){
     push(@{$samples->{$sample}}, $f);
         
     if(! -e "$rundir"){
-	mkdir("$rundir") or die "Couldn't create directory: $rundir\n";
+	make_path($rundir) or die "Couldn't create directory: $rundir\n";
     }
     if(! -e "$rundir/read_counts" && $opt{count} ne 'no'){
 	mkdir("$rundir/read_counts") or die "Couldn't create directory: $rundir/read_counts\n";
