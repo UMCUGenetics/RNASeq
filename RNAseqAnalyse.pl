@@ -70,7 +70,7 @@ my %opt;
     'rnaseqc_path'			=> '/hpc/cog_bioinf/common_scripts/RNA-SeQC_v1.1.7.jar',
     'python_path'			=> '/hpc/local/CentOS6/cog_bioinf/Python-2.7.6/bin/python2.7',
     'gtf_file'				=> '/hpc/cog_bioinf/GENOMES',
-    'merge_normalize_script'		=> '/hpc/cog_bioinf/common_scripts/RNA_seq_pipeline/merge_normalize_count_tables.r',
+    'merge_normalize_script'		=> '/hpc/cog_bioinf/common_scripts/RNA_seq_analysis/merge_normalize_count_tables.r',
     'refflat_file'			=> '/hpc/cog_bioinf/data/annelies/RNA_Seq'
 );
 
