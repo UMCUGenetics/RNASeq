@@ -18,10 +18,10 @@ sub usage{
   
     Required params:
     -i|input				[s]	Input run (!) directory [/path/to/rundir]
+    -o|output				[s]	Directory to store mapping results [/path/to/store]
     
     Options:
     -h|help				[s]	Help
-    -o|output				[s]	Directory to store mapping results [/path/to/store] Default: /hpc/cog_bioinf/data/mapping/RNA_seq/
     -sp|species				[s]	Species of RNA-seq data [HUMAN/RAT/MOUSE/ZEBRAFISH] Default: HUMAN
     -pe|nthreads			[i]	Number of threads for processes run on execute nodes. [number] Default: 4
     -g|genome				[s]	Directory with reference genome [/path/to/genome] Default: /hpc/cog_bioinf/GENOMES
@@ -30,6 +30,8 @@ sub usage{
     -stranded				[s]	Is the RNA-seq data from a strand-specific assay? [yes/no/reversed] Default: reversed
     -fusionSearch			[s]	Want to detect fusion genes? [yes/no] Default: yes
     -c|count				[s]	Want to count the mapped reads? [yes/no] Default: yes
+    -feature				[s]	Which feature do you want to count? [gene_id/transcript_id/exon_id] Default: gene_id
+    -uniq				[s]	Want to retreive alignment file (BAM) with unique reads? [yes/no] Default: no
     -chimSegmentMin			[i]	Minimum length of chimeric segment length. [number] Default: 15
     -chimJunctionOverhangMin		[i]	Minimum overhang for a chimeric junction. [number] Default: 15
     -outSJfilterIntronMaxVsReadN	[s]	Maximum gap allowed for junctions supported by 1,2,3...N reads. [number] Default: 10.000.000
@@ -48,13 +50,15 @@ my %opt;
 %opt = (
     'help'				=> undef,
     'input'				=> undef,
-    'output'				=> '/hpc/cog_bioinf/data/mapping/RNA_seq/',
+    'output'				=> undef,
     'nthreads'				=> 4,
     'fastqc'				=> "yes",
     'mapping'				=> "yes",
     'stranded'				=> "reversed",
     'fusionSearch'			=> "yes",
     'count'				=> "yes",
+    'feature'				=> "gene_id",
+    'uniq'				=> "no",
     'chimSegmentMin'			=> 15,
     'outSJfilterIntronMaxVsReadN'	=> 10000000,
     'chimJunctionOverhangMin'		=> 15,
@@ -70,7 +74,7 @@ my %opt;
     'rnaseqc_path'			=> '/hpc/cog_bioinf/common_scripts/RNA-SeQC_v1.1.7.jar',
     'python_path'			=> '/hpc/local/CentOS6/cog_bioinf/Python-2.7.6/bin/python2.7',
     'gtf_file'				=> '/hpc/cog_bioinf/GENOMES',
-    'merge_normalize_script'		=> '/hpc/cog_bioinf/common_scripts/RNA_seq_pipeline/merge_normalize_count_tables.r',
+    'merge_normalize_script'		=> '/hpc/cog_bioinf/common_scripts/RNA_seq_analysis/merge_normalize_count_tables.r',
     'refflat_file'			=> '/hpc/cog_bioinf/data/annelies/RNA_Seq'
 );
 
@@ -87,6 +91,8 @@ GetOptions (
     'm|mapping=s'			=> \$opt{mapping},
     'fusionSearch=s'			=> \$opt{fusionSearch},
     'c|count=s'				=> \$opt{count},
+    'feature=s'				=> \$opt{feature},
+    'uniq=s'				=> \$opt{uniq},
     'chimSegmentMin=i'			=> \$opt{chimSegmentMin},
     'outSJfilterIntronMaxVsReadN=s'	=> \$opt{outSJfilterIntronMaxVsReadN},
     'chimJunctionOverhangMin=i'		=> \$opt{chimJunctionOverhangMin},
@@ -105,6 +111,8 @@ die "[ERROR] Wrong option ($opt{stranded}) given with -stranded. Must be \"yes\"
 die "[ERROR] Wrong option ($opt{fusionSearch}) given with -fusionSearch. Must be \"yes\" or \"no\".\n" if ( ($opt{fusionSearch} ne "no") && ($opt{fusionSearch} ne "yes") );
 die "[ERROR] Value given with -chimSegmentMin ($opt{chimSegmentMin}) must be higher than 0, when searching for fusion genes.\n" if ( ($opt{fusionSearch} eq "yes") && ($opt{chimSegmentMin} <= 0) );
 die "[ERROR] Wrong option ($opt{count}) given with -count. Must be \"yes\" or \"no\".\n" if ( ($opt{count} ne "no") && ($opt{count} ne "yes") );
+die "[ERROR] Wrong option ($opt{uniq}) given with -uniq. Must be \"yes\" or \"no\".\n" if ( ($opt{uniq} ne "no") && ($opt{uniq} ne "yes") );
+die "[ERROR] Wrong option ($opt{feature}) given with -feature. Must be \"gene_id\", \"transcript_id\" or \"exon_id\".\n" if ( ($opt{feature} ne "gene_id") && ($opt{feature} ne "transcript_id") && ($opt{feature} ne "exon_id") );
 
 my $SPECIES = uc $opt{species};
 if ($SPECIES eq "HUMAN"){
@@ -322,15 +330,20 @@ foreach my $sample (keys %{$samples}) {
 	#Add read groups using picard
 	print STAR_SH "java -jar $opt{picard_path}\/AddOrReplaceReadGroups.jar INPUT=$rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.out.bam OUTPUT=$rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.out.rgAdded.bam RGID=$ID RGLB=$LB RGPL=$PL RGPU=$PU RGSM=$SM\n";
 
-	#sort bam
+	#sort & index bam
 	print STAR_SH "$opt{sambamba_path} sort -t $opt{nthreads} -o $rundir/$sample/mapping/$sample\_sorted.bam $rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.out.rgAdded.bam\n";
+	print STAR_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sorted.bam\n";
+
 	#sort bam by name (needed for htseq count)
 	print STAR_SH "$opt{sambamba_path} sort -n -t $opt{nthreads} -o $rundir/$sample/mapping/$sample\_sorted_byName.bam $rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.out.rgAdded.bam\n";
-	#index sorted bam
-	print STAR_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sorted.bam\n";
-	#index sorted bam
-	print STAR_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sorted_byName.bam\n";
-
+	
+	if ( $opt{uniq} eq 'yes' ){
+	    print STAR_SH "$opt{sambamba_path} view -t $opt{nthreads} -f bam -F \"not secondary_alignment\" $rundir/$sample/mapping/$sample\_sorted.bam >$rundir/$sample/mapping/$sample\_sorted_uniq.bam\n";
+	    print STAR_SH "java -Xmx2g  -jar $opt{picard_path}\/MarkDuplicates.jar INPUT=$rundir/$sample/mapping/$sample\_sorted_uniq.bam OUTPUT=$rundir/$sample/mapping/$sample\_sorted_uniq_markDup.bam METRICS_FILE=$rundir/$sample/mapping/$sample\_sorted_uniq_markDup_metrics.txt\n";
+	    print STAR_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sorted_uniq.bam\n";
+	    print STAR_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sorted_uniq_markDup.bam\n";
+	    print STAR_SH "$opt{sambamba_path} flagstat $rundir/$sample/mapping/$sample\_sorted_uniq_markDup.bam\n";
+	}
 	#get stats from picard
 	my $picard_strand = '';
 	$picard_strand = 'FIRST_READ_TRANSCRIPTION_STRAND' if $opt{stranded} eq 'yes';
@@ -379,7 +392,7 @@ foreach my $sample (keys %{$samples}) {
 		$s_val = 'no' if $opt{stranded} eq "no";
 	    }
 	    
-	    print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sorted_byName.bam | $opt{python_path} -m HTSeq.scripts.count -m union -s $s_val -i gene_id - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_counts.txt\n";
+	    print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sorted_byName.bam | $opt{python_path} -m HTSeq.scripts.count -m union -s $s_val -i $opt{feature} - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_counts.txt\n";
 
 	    print HT "rm $rundir/$sample/mapping/$sample\_sorted_byName.bam*\n";
 	    close HT;
