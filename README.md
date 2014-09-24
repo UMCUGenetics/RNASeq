@@ -39,9 +39,19 @@ The pipeline searches for fusion genes / chimeric junctions by default. The defa
 
 
 4. Read counts
-=============================
+==============
 
-The raw read counts table can be found in the directory: <rundir>/read_counts/<run>_merged_counts.txt.
-This table is normalized using the DESeq method included in the DESeq Bioconductor package and is based on the hypothesis that most genes are not DE.
-A DESeq scaling factor for a given lane is computed as the median of the ratio, for each gene, of its read count over its geometric mean across all lanes.
-Differential expression analysis can be performed using the normalized table.
+The raw read counts table can be found in the directory: <rundir>/read_counts/<run>_merged_counts.txt. This table contains ENSEMBL gene IDs (rows) and the raw read 
+counts per library (columns). The counting is done by htseq-count.
+
+
+5. Normalized read counts
+=========================
+
+The raw read counts are normalized using the DESeq method included in the DESeq Bioconductor package and is based on the hypothesis that most genes are not DE. A DESeq scaling factor for
+a given lane is computed as the median of the ratio, for each gene, of its read count over its geometric mean across all lanes. The underlying idea is that non-DE
+genes should have similar read counts across samples, leading to a ratio of 1. Assuming most genes are not DE, the median of this ratio for the lane provides an
+estimate of the correction factor that should be applied to all read counts of this lane to fulfill the hypothesis. By calling the estimateSizeFactors() and sizeFactors()
+functions in the DESeq Bioconductor package, this factor is computed for each lane, and raw read counts are divided by the factor associated with their sequencing lane. 
+
+Differential expression analysis can be performed using this normalized table.
