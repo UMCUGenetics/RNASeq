@@ -19,7 +19,7 @@ sub usage{
   
     Required params:
     -i|input				[s]	Input run (!) directory [/path/to/rundir]
-    -o|output				[s]	Directory to store mapping results [/path/to/store]
+    -o|output				[s]	Directory to store mapping results [/path/to/store/rundir]
     
     Options:
     -h|help				[s]	Help
@@ -82,7 +82,7 @@ my %opt;
 die usage() if @ARGV == 0;
 GetOptions (
     'h|help'				=> \$opt{help},
-    'i|input=s'				=> \$opt{input},
+    'i|input=s@'			=> \$opt{input},
     'o|output=s'			=> \$opt{output},
     'pe|nthreads=i'			=> \$opt{nthreads},
     'g|genome=s'			=> \$opt{genome},
@@ -103,8 +103,7 @@ GetOptions (
 #check input paramaters
 die usage() if $opt{help};
 die "[ERROR] Number of threads must be at least 3!\n" if ($opt{nthreads} < 3);
-die usage() unless $opt{input};
-die usage() unless $opt{output};
+die usage() unless ( $opt{input} || $opt{output} );
 die "[ERROR] Nothing to do!\n" if ( ($opt{fastqc} eq "no") && ($opt{mapping} eq "no") && ($opt{count} eq "no") );
 die "[ERROR] Wrong option ($opt{fastqc}) given with -fastqc. Must be \"yes\" or \"no\".\n" if ( ($opt{fastqc} ne "no") && ($opt{fastqc} ne "yes") );
 die "[ERROR] Wrong option ($opt{mapping}) given with -mapping. Must be \"yes\" or \"no\".\n" if ( ($opt{mapping} ne "no") && ($opt{mapping} ne "yes") );
@@ -147,10 +146,14 @@ if ($SPECIES eq "HUMAN"){
 ## ======================================
 
 my @samplefiles;
+my $input = $opt{input};
+my @input = split(/,/,join(',',@$input));
 
-foreach my $input ($opt{input}){
-    open (FIND, "find -L $input -name '*_R1*.fastq.gz' |");
-
+foreach my $fastqdir (@input){
+    
+    if ( ! -e $fastqdir ){ die "fastqdir does not exist." }
+    
+    open (FIND, "find $fastqdir -name '*_R1*.fastq.gz' |");
     while (my $f= <FIND>) {
 	chomp $f;
 	my $pattern = 'Undetermined_indices';
@@ -174,15 +177,13 @@ my $rundir = "";
 my $samples = {};
 
 foreach my $f (@samplefiles){
-    my @path_parts = split("/", $f);
         
     my $base = basename($f);
     my @parts = split("_",$base);
-    my $sample = join("_",@parts[0..$#parts-3]);
+    my $sample = join("-",@parts[0..$#parts-3]);
     my @input_parts = split("/","$opt{input}");
-    my $run_name = $input_parts[$#input_parts];
     
-    $rundir="$opt{output}/$run_name";
+    $rundir=$opt{output};
     push(@{$samples->{$sample}}, $f);
         
     if(! -e "$rundir"){
