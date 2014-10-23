@@ -15,11 +15,11 @@ sub usage{
   
   Usage:
   
-  Run by typing:	perl RNAseqAnalyse.pl -input [run directory] -output [output directory]
+  Run by typing:	perl RNAseqAnalyse.pl -input [run directory] -outputDir [output directory]
   
     Required params:
-    -i|input				[s]	Input run (!) directory [/path/to/rundir]
-    -o|output				[s]	Directory to store mapping results [/path/to/store/rundir]
+    -i|input				[s]	Input run directory [/path/to/rundir] (list of input run directories is allowed, separated by ',')
+    -o|outputDir			[s]	Directory to store mapping results [/path/to/outputDir]
     
     Options:
     -h|help				[s]	Help
@@ -51,7 +51,7 @@ my %opt;
 %opt = (
     'help'				=> undef,
     'input'				=> undef,
-    'output'				=> undef,
+    'outputDir'				=> undef,
     'nthreads'				=> 4,
     'fastqc'				=> "yes",
     'mapping'				=> "yes",
@@ -83,7 +83,7 @@ die usage() if @ARGV == 0;
 GetOptions (
     'h|help'				=> \$opt{help},
     'i|input=s@'			=> \$opt{input},
-    'o|output=s'			=> \$opt{output},
+    'o|outputDir=s'			=> \$opt{outputDir},
     'pe|nthreads=i'			=> \$opt{nthreads},
     'g|genome=s'			=> \$opt{genome},
     'fa|fasta=s'			=> \$opt{fasta},
@@ -103,7 +103,7 @@ GetOptions (
 #check input paramaters
 die usage() if $opt{help};
 die "[ERROR] Number of threads must be at least 3!\n" if ($opt{nthreads} < 3);
-die usage() unless ( $opt{input} || $opt{output} );
+die usage() unless ( $opt{input} || $opt{outputDir} );
 die "[ERROR] Nothing to do!\n" if ( ($opt{fastqc} eq "no") && ($opt{mapping} eq "no") && ($opt{count} eq "no") );
 die "[ERROR] Wrong option ($opt{fastqc}) given with -fastqc. Must be \"yes\" or \"no\".\n" if ( ($opt{fastqc} ne "no") && ($opt{fastqc} ne "yes") );
 die "[ERROR] Wrong option ($opt{mapping}) given with -mapping. Must be \"yes\" or \"no\".\n" if ( ($opt{mapping} ne "no") && ($opt{mapping} ne "yes") );
@@ -153,7 +153,7 @@ foreach my $fastqdir (@input){
     
     if ( ! -e $fastqdir ){ die "fastqdir does not exist." }
     
-    open (FIND, "find $fastqdir -name '*_R1*.fastq.gz' |");
+    open (FIND, "find $fastqdir -name '*_R1_001.fastq.gz' |");
     while (my $f= <FIND>) {
 	chomp $f;
 	my $pattern = 'Undetermined_indices';
@@ -183,7 +183,7 @@ foreach my $f (@samplefiles){
     my $sample = join("-",@parts[0..$#parts-3]);
     my @input_parts = split("/","$opt{input}");
     
-    $rundir=$opt{output};
+    $rundir=$opt{outputDir};
     push(@{$samples->{$sample}}, $f);
         
     if(! -e "$rundir"){
@@ -221,11 +221,9 @@ open QSUB, ">$mainJobID";
 print QSUB "\#!/bin/sh\n\#\$ \-o $rundir\n\#\$ \-e $rundir\n\n";
 
 my @hold_ids=();
-my $paired = 0;
-
 
 foreach my $sample (keys %{$samples}) {
-	
+	my $paired = 0;
 	print "Files for sample $sample:\n";
 	my $job_id = "STAR_$sample\_".get_job_id();
 	
@@ -263,7 +261,7 @@ foreach my $sample (keys %{$samples}) {
 	foreach my $fastq (@{$samples->{$sample}}){
 	    my $R1 = $fastq;
 	    my $R2 = $fastq;
-	    $R2 =~ s/R1/R2/;
+	    $R2 =~ s/R1_001/R2_001/;
 	    
 	    my $fastqname = basename($R1);
 	    my @cols = split("_",$fastqname);
