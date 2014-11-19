@@ -31,6 +31,7 @@ sub usage{
     -stranded				[s]	Is the RNA-seq data from a strand-specific assay? [yes/no/reversed] Default: reversed
     -fusionSearch			[s]	Want to detect fusion genes? [yes/no] Default: yes
     -c|count				[s]	Want to count the mapped reads? [yes/no] Default: yes
+    -bamqc				[s]	Want to retrieve bam statistics? [yes/no] Default: yes
     -feature				[s]	Which feature do you want to count? [gene_id/transcript_id/exon_id] Default: gene_id
     -uniq				[s]	Want to retreive alignment file (BAM) with unique reads? [yes/no] Default: no
     -chimSegmentMin			[i]	Minimum length of chimeric segment length. [number] Default: 15
@@ -58,6 +59,7 @@ my %opt;
     'stranded'				=> "reversed",
     'fusionSearch'			=> "yes",
     'count'				=> "yes",
+    'bamqc'				=> "yes",
     'feature'				=> "gene_id",
     'uniq'				=> "no",
     'chimSegmentMin'			=> 15,
@@ -74,6 +76,7 @@ my %opt;
     'picard_path'			=> '/hpc/cog_bioinf/common_scripts/picard-tools-1.98',
     'rnaseqc_path'			=> '/hpc/cog_bioinf/common_scripts/RNA-SeQC_v1.1.7.jar',
     'python_path'			=> '/hpc/local/CentOS6/cog_bioinf/Python-2.7.6/bin/python2.7',
+    'bamstats_path'			=> '/hpc/cog_bioinf/common_scripts/bamStats/bamStats.pl',
     'gtf_file'				=> '/hpc/cog_bioinf/GENOMES',
     'merge_normalize_script'		=> '/hpc/cog_bioinf/common_scripts/RNA_seq_analysis/merge_normalize_count_tables.r',
     'refflat_file'			=> '/hpc/cog_bioinf/data/annelies/RNA_Seq'
@@ -92,6 +95,7 @@ GetOptions (
     'm|mapping=s'			=> \$opt{mapping},
     'fusionSearch=s'			=> \$opt{fusionSearch},
     'c|count=s'				=> \$opt{count},
+    'bamqc=s'				=> \$opt{bamqc},
     'feature=s'				=> \$opt{feature},
     'uniq=s'				=> \$opt{uniq},
     'chimSegmentMin=i'			=> \$opt{chimSegmentMin},
@@ -221,12 +225,13 @@ open QSUB, ">$mainJobID";
 print QSUB "\#!/bin/sh\n\#\$ \-o $rundir\n\#\$ \-e $rundir\n\n";
 
 my @hold_ids=();
+my @hold_mapping_ids=();
+my $paired = 0;
 
 foreach my $sample (keys %{$samples}) {
-	my $paired = 0;
 	print "Files for sample $sample:\n";
 	my $job_id = "STAR_$sample\_".get_job_id();
-	
+	push @hold_mapping_ids, $job_id;
 	#create bash script for STAR submission of this sample
 	open STAR_SH,">$rundir/$sample/jobs/$job_id.sh" or die "Couldn't create $rundir/$sample/jobs/$job_id.sh\n";
 	print STAR_SH "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
@@ -415,6 +420,37 @@ if ( $opt{count} eq "yes"){
 	my $hold_line = join ',',@hold_ids;
 	print QSUB "qsub -q veryshort -o $rundir -e $rundir -N $normTables_job_id -hold_jid $hold_line $rundir/$normTables_job_id.sh\n\n";
 }
+
+if ( $opt{bamqc} eq "yes"){
+    my ($bamQC_job_id) = ("bamQC_".get_job_id());
+    open BQ, ">$rundir/$bamQC_job_id.sh";
+    print BQ "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
+    print BQ "uname -n > $rundir/$bamQC_job_id.host\n";
+
+    my $picard_strand = '';
+    $picard_strand = 'FIRST_READ_TRANSCRIPTION_STRAND' if $opt{stranded} eq 'yes';
+    $picard_strand = 'SECOND_READ_TRANSCRIPTION_STRAND' if $opt{stranded} eq 'reversed';
+    $picard_strand = 'NONE' if $opt{stranded} eq 'no';
+    
+    print BQ "shopt -s nullglob\n\n";
+    print BQ "filearray=(\"$rundir\"/*/mapping/*_sorted.bam)\n\n";
+    print BQ "bar=\$(printf \",%s\" \"\${filearray[\@]}\")\n\n";
+    print BQ "bamline=`echo \$bar | sed 's/,/ -bam /g'`\n\n";
+    if ( $paired==0 ){
+	print BQ "perl $bamstats_path \${bamline} -rna -ref_flat $opt{refflat_file} -strand $picard_strand -single_end -genome $opt{fasta}\n\n";
+    }
+    elsif ( $paired==1 ){
+	print BQ "perl $bamstats_path \${bamline} -rna -ref_flat $opt{refflat_file} -strand $picard_strand -genome $opt{fasta}\n\n";
+    }
+    close BQ;
+    if ( $opt{mapping} eq "no" ){
+	print QSUB "qsub -q veryshort -o $rundir -e $rundir -N $bamQC_job_id $rundir/$bamQC_job_id.sh\n\n";
+    }else{
+	my $hold_line = join ',',@hold_mapping_ids;
+	print QSUB "qsub -q veryshort -o $rundir -e $rundir -N $bamQC_job_id -hold_jid $hold_line $rundir/$bamQC_job_id.sh\n\n";
+    }
+}
+    
 
 close QSUB;
 system "sh $mainJobID";
