@@ -437,10 +437,10 @@ if ( $opt{bamqc} eq "yes"){
     print BQ "bar=\$(printf \",%s\" \"\${filearray[\@]}\")\n\n";
     print BQ "bamline=`echo \$bar | sed 's/,/ -bam /g'`\n\n";
     if ( $paired==0 ){
-	print BQ "perl $bamstats_path \${bamline} -rna -ref_flat $opt{refflat_file} -strand $picard_strand -single_end -genome $opt{fasta}\n\n";
+	print BQ "perl $opt{bamstats_path} \${bamline} -rna -ref_flat $opt{refflat_file} -strand $picard_strand -single_end -genome $opt{fasta}\n\n";
     }
     elsif ( $paired==1 ){
-	print BQ "perl $bamstats_path \${bamline} -rna -ref_flat $opt{refflat_file} -strand $picard_strand -genome $opt{fasta}\n\n";
+	print BQ "perl $opt{bamstats_path} \${bamline} -rna -ref_flat $opt{refflat_file} -strand $picard_strand -genome $opt{fasta}\n\n";
     }
     close BQ;
     if ( $opt{mapping} eq "no" ){
