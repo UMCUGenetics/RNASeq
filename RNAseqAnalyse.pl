@@ -68,6 +68,7 @@ my %opt;
     'species'				=> "HUMAN",
     'genome'				=> '/hpc/cog_bioinf/GENOMES',
     'fasta'				=> '/hpc/cog_bioinf/GENOMES',
+    'intervallist'			=> '/hpc/cog_bioinf/GENOMES',
     'fastqc_path'			=> '/hpc/cog_bioinf/common_scripts/FastQC/fastqc',
     'star_path'				=> '/hpc/local/CentOS6/cog_bioinf/STAR_2.3.0e/STAR',
     'samtools_path'			=> '/hpc/cog_bioinf/common_scripts/samtools-0.1.19/samtools',
@@ -76,7 +77,7 @@ my %opt;
     'picard_path'			=> '/hpc/cog_bioinf/common_scripts/picard-tools-1.98',
     'rnaseqc_path'			=> '/hpc/cog_bioinf/common_scripts/RNA-SeQC_v1.1.7.jar',
     'python_path'			=> '/hpc/local/CentOS6/cog_bioinf/Python-2.7.6/bin/python2.7',
-    'bamstats_path'			=> '/hpc/cog_bioinf/common_scripts/bamStats/bamStats.pl',
+    'bamstats_path'			=> '/hpc/cog_bioinf/common_scripts/bamMetrics/bamMetrics.pl',
     'gtf_file'				=> '/hpc/cog_bioinf/GENOMES',
     'merge_normalize_script'		=> '/hpc/cog_bioinf/common_scripts/RNA_seq_analysis/merge_normalize_count_tables.r',
     'refflat_file'			=> '/hpc/cog_bioinf/data/annelies/RNA_Seq'
@@ -124,21 +125,25 @@ if ($SPECIES eq "HUMAN"){
     $opt{fasta} .= '/Homo_sapiens.GRCh37.GATK.illumina/STAR/hg19.fa';
     $opt{gtf_file} .= '/Homo_sapiens.GRCh37.GATK.illumina/Homo_sapiens.GRCh37.74.gtf';
     $opt{refflat_file} .= '/hg19.refFlat.gz';
+    $opt{intervallist} .= '/Homo_sapiens.GRCh37.GATK.illumina/Homo_sapiens.GRCh37.GATK.illumina.rRNA.intervallist';
 } elsif ($SPECIES eq "RAT"){
     $opt{genome} .= '/rat_GATK_illumina_rnor_50/STAR';
     $opt{fasta} .= '/rat_GATK_illumina_rnor_50/STAR/rnor50.fa';
     $opt{gtf_file} .= '/rat_GATK_illumina_rnor_50/Rattus_norvegicus.Rnor_5.0.71.gtf';
     $opt{refflat_file} .= '/rnor50.refFlat.gz';
+    $opt{intervallist} .= '/rat_GATK_illumina_rnor_50/rno5_rRNA_intervallist.txt';
 } elsif ($SPECIES eq "MOUSE"){
     $opt{genome} .= '/Mus_musculus_GRCm38_GATK_illumina_bwa075/STAR/mus_musculus_GRCm38';
     $opt{fasta} .= '/Mus_musculus_GRCm38_GATK_illumina_bwa075/STAR/mus_musculus_GRCm38/Mm_GRCm38_gatk_sorted.fa';
     $opt{gtf_file} .= '/Mus_musculus_GRCm38_GATK_illumina_bwa075/STAR/mus_musculus_GRCm38/Mus_musculus.GRCm38.70.gtf';
     $opt{refflat_file} .= '/Mus_musculus_GRCm38.refFlat.gz';
+    $opt{intervallist} .= '/Mus_musculus_GRCm38_GATK_illumina_bwa075/Mus_musculus_GRCm38.rRNA.intervallist';
 } elsif ($SPECIES eq "ZEBRAFISH"){
     $opt{genome} .= '/zfish9/STAR';
     $opt{fasta} .= '/zfish9/STAR/Zv9_66.fa';
     $opt{gtf_file} .= '/zfish9/Danio_rerio.Zv9.75.gtf';
     $opt{refflat_file} .= '/zfish9.refFlat.gz';
+    $opt{intervallist} .= '/zfish9/Danio_rerio.Zv9.75.rRNA.intervallist';
 } else { 
     die "[ERROR] Wrong species ($SPECIES). Only HUMAN, RAT, MOUSE or ZEBRAFISH genomes are allowed.\n"
 }
@@ -154,8 +159,9 @@ my $input = $opt{input};
 my @input = split(/,/,join(',',@$input));
 
 foreach my $fastqdir (@input){
+    print "$fastqdir\n";
     
-    if ( ! -e $fastqdir ){ die "fastqdir does not exist." }
+    if ( ! -e $fastqdir ){ die "$fastqdir does not exist." }
     
     open (FIND, "find $fastqdir -name '*_R1_001.fastq.gz' |");
     while (my $f= <FIND>) {
@@ -184,7 +190,7 @@ foreach my $f (@samplefiles){
         
     my $base = basename($f);
     my @parts = split("_",$base);
-    my $sample = join("-",@parts[0..$#parts-3]);
+    my $sample = $parts[0];
     my @input_parts = split("/","$opt{input}");
     
     $rundir=$opt{outputDir};
@@ -349,12 +355,13 @@ foreach my $sample (keys %{$samples}) {
 	    print STAR_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sorted_uniq_markDup.bam\n";
 	    print STAR_SH "$opt{sambamba_path} flagstat $rundir/$sample/mapping/$sample\_sorted_uniq_markDup.bam\n";
 	}
-	#get stats from picard
-	my $picard_strand = '';
-	$picard_strand = 'FIRST_READ_TRANSCRIPTION_STRAND' if $opt{stranded} eq 'yes';
-	$picard_strand = 'SECOND_READ_TRANSCRIPTION_STRAND' if $opt{stranded} eq 'reversed';
-	$picard_strand = 'NONE' if $opt{stranded} eq 'no';
-	print STAR_SH "java -jar $opt{picard_path}\/CollectRnaSeqMetrics.jar REF_FLAT=$opt{refflat_file} INPUT=$rundir/$sample/mapping/$sample\_sorted.bam OUTPUT=$rundir/$sample/mapping/$sample\_sorted_PicardRnaMetrics REFERENCE_SEQUENCE=$opt{fasta} STRAND_SPECIFICITY=$picard_strand\n";
+# 	#get stats from picard
+# 	my $picard_strand = '';
+# 	$picard_strand = 'FIRST_READ_TRANSCRIPTION_STRAND' if $opt{stranded} eq 'yes';
+# 	$picard_strand = 'SECOND_READ_TRANSCRIPTION_STRAND' if $opt{stranded} eq 'reversed';
+# 	$picard_strand = 'NONE' if $opt{stranded} eq 'no';
+# 	
+# 	print STAR_SH "java -jar $opt{picard_path}\/CollectRnaSeqMetrics.jar REF_FLAT=$opt{refflat_file} RIBOSOMAL_INTERVALS=$opt{intervallist} INPUT=$rundir/$sample/mapping/$sample\_sorted.bam OUTPUT=$rundir/$sample/mapping/$sample\_sorted_PicardRnaMetrics REFERENCE_SEQUENCE=$opt{fasta} STRAND_SPECIFICITY=$picard_strand\n";
 
 	#remove and move files
 	print STAR_SH "rm $rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.out.sam\n";
@@ -427,20 +434,28 @@ if ( $opt{bamqc} eq "yes"){
     print BQ "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
     print BQ "uname -n > $rundir/$bamQC_job_id.host\n";
 
-    my $picard_strand = '';
-    $picard_strand = 'FIRST_READ_TRANSCRIPTION_STRAND' if $opt{stranded} eq 'yes';
-    $picard_strand = 'SECOND_READ_TRANSCRIPTION_STRAND' if $opt{stranded} eq 'reversed';
-    $picard_strand = 'NONE' if $opt{stranded} eq 'no';
+    my $picard_strand;
+    if ( $paired==1 ){
+	$picard_strand = 'FIRST_READ_TRANSCRIPTION_STRAND' if $opt{stranded} eq 'reversed';
+	$picard_strand = 'SECOND_READ_TRANSCRIPTION_STRAND' if $opt{stranded} eq 'yes';
+	$picard_strand = 'NONE' if $opt{stranded} eq 'no';
+    }elsif ( $paired==0 ){
+	$picard_strand = 'FIRST_READ_TRANSCRIPTION_STRAND' if $opt{stranded} eq 'yes';
+	$picard_strand = 'SECOND_READ_TRANSCRIPTION_STRAND' if $opt{stranded} eq 'reversed';
+	$picard_strand = 'NONE' if $opt{stranded} eq 'no';
+    }
+    
+    my $runname = basename( $rundir );
     
     print BQ "shopt -s nullglob\n\n";
     print BQ "filearray=(\"$rundir\"/*/mapping/*_sorted.bam)\n\n";
     print BQ "bar=\$(printf \",%s\" \"\${filearray[\@]}\")\n\n";
     print BQ "bamline=`echo \$bar | sed 's/,/ -bam /g'`\n\n";
     if ( $paired==0 ){
-	print BQ "perl $opt{bamstats_path} \${bamline} -rna -ref_flat $opt{refflat_file} -strand $picard_strand -single_end -genome $opt{fasta}\n\n";
+	print BQ "perl $opt{bamstats_path} \${bamline} -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -single_end -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
     }
     elsif ( $paired==1 ){
-	print BQ "perl $opt{bamstats_path} \${bamline} -rna -ref_flat $opt{refflat_file} -strand $picard_strand -genome $opt{fasta}\n\n";
+	print BQ "perl $opt{bamstats_path} \${bamline} -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -genome $opt{fasta}\n\n";
     }
     close BQ;
     if ( $opt{mapping} eq "no" ){
