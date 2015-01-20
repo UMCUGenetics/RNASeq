@@ -468,7 +468,7 @@ if ( $opt{bamqc} eq "yes"){
     
 
 close QSUB;
-#system "sh $mainJobID";
+system "sh $mainJobID";
 
 
 sub get_job_id {
