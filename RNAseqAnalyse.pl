@@ -166,7 +166,7 @@ foreach my $fastqdir (@input){
     open (FIND, "find $fastqdir -name '*_R1_001.fastq.gz' |");
     while (my $f= <FIND>) {
 	chomp $f;
-	my $pattern = 'Undetermined_indices';
+	my $pattern = 'Undetermined';
 	push @samplefiles, $f unless $f =~ /$pattern/;
     }
     close FIND;
