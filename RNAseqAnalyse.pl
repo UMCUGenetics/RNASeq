@@ -31,7 +31,7 @@ sub usage{
     -stranded                         [s]	Is the RNA-seq data from a strand-specific assay? [yes/no/reversed] Default: reversed
     -fusionSearch                     [s]	Want to detect fusion genes? [yes/no] Default: yes
     -c|count                          [s]	Want to count the mapped reads? [yes/no] Default: yes
-    -n|normalize                      [s]	Want to merge and normalize counted reads? [yes/no] Default: yes
+    -n|normalize                      [s]	Want to normalize counted reads? [yes/no] Default: no
     -rpkm                             [s]	Want to retrieve RPKMs? [yes/no] Default: yes
     -bamqc                            [s]	Want to retrieve bam statistics? [yes/no] Default: yes
     -id                               [s]	Which id attribute do you want to count? [gene_id/transcript_id/exon_id] Default: gene_id
@@ -61,7 +61,8 @@ my %opt;
     'stranded'				=> "reversed",
     'fusionSearch'			=> "yes",
     'count'				=> "yes",
-    'normalize'				=> "yes",
+    'merge'				=> "yes",
+    'normalize'				=> "no",
     'rpkm'				=> "yes",
     'bamqc'				=> "yes",
     'id'				=> "gene_id",
@@ -70,7 +71,8 @@ my %opt;
     'outSJfilterIntronMaxVsReadN'	=> 10000000,
     'chimJunctionOverhangMin'		=> 15,
     'species'				=> "HUMAN",
-    'genome'				=> '/hpc/cog_bioinf/GENOMES',
+#     'genome'				=> '/hpc/cog_bioinf/GENOMES',
+    'genome'				=> '/hpc/cog_bioinf/data/annelies/RNA_Seq/GENOMES',
     'fasta'				=> undef,
     'intervallist'			=> undef,
     'gtf_file'				=> undef,
@@ -78,8 +80,8 @@ my %opt;
     'genesizes_file'			=> undef,
     'fastqc_path'			=> '/hpc/cog_bioinf/common_scripts/FastQC/fastqc',
 #     'star_path'				=> '/hpc/local/CentOS6/cog_bioinf/STAR_2.3.0e/STAR',
-    'star_path'				=> '/hpc/local/CentOS6/cog_bioinf/STAR-STAR_2.4.0i/source/STAR',
-    'sambamba_path'			=> '/hpc/local/CentOS6/cog_bioinf/bin/sambamba_v0.4.5',
+    'star_path'				=> '/hpc/local/CentOS6/cog_bioinf/STAR-STAR_2.4.1d/source/STAR',
+    'sambamba_path'			=> '/hpc/cog_bioinf/common_scripts/sambamba_v0.5.4/sambamba_v0.5.4',
     'picard_path'			=> '/hpc/cog_bioinf/common_scripts/picard-tools-1.98',
     'python_path'			=> '/hpc/local/CentOS6/cog_bioinf/Python-2.7.6/bin/python2.7',
     'bamstats_path'			=> '/hpc/cog_bioinf/common_scripts/bamMetrics/bamMetrics.pl'
@@ -98,6 +100,7 @@ GetOptions (
     'm|mapping=s'			=> \$opt{mapping},
     'fusionSearch=s'			=> \$opt{fusionSearch},
     'c|count=s'				=> \$opt{count},
+    'merge=s'				=> \$opt{merge},
     'n|normalize=s'			=> \$opt{normalize},
     'rpkm=s'				=> \$opt{rpkm},
     'bamqc=s'				=> \$opt{bamqc},
@@ -127,43 +130,82 @@ die "[ERROR] Wrong option ($opt{uniq}) given with -uniq. Must be \"yes\" or \"no
 die "[ERROR] Wrong option ($opt{id}) given with -id. Must be \"gene_id\", \"transcript_id\" or \"exon_id\".\n" if ( ($opt{id} ne "gene_id") && ($opt{id} ne "transcript_id") && ($opt{id} ne "exon_id") );
 
 my $SPECIES = uc $opt{species};
+# if ($SPECIES eq "HUMAN"){
+#     $opt{genome} .= '/Homo_sapiens.GRCh37.GATK.illumina/STAR';
+#     $opt{fasta} = $opt{genome}.'/hg19.fa';
+#     $opt{gtf_file} = $opt{genome}.'/Homo_sapiens.GRCh37.74.gtf';
+#     $opt{refflat_file} = $opt{genome}.'/hg19.refFlat.gz';
+#     $opt{intervallist} = $opt{genome}.'/Homo_sapiens.GRCh37.GATK.illumina.rRNA.intervallist';
+#     $opt{genesizes_file} = $opt{genome}.'/Homo_sapiens.GRCh37.74_exon_gene_sizes.txt';
+# } elsif ($SPECIES eq "RAT"){
+#     $opt{genome} .= '/rat_GATK_illumina_rnor_50/STAR';
+#     $opt{fasta} = $opt{genome}.'/rat_GATK_illumina_rnor_50/STAR/rnor50.fa';
+#     $opt{gtf_file} = $opt{genome}.'/Rattus_norvegicus.Rnor_5.0.71.gtf';
+#     $opt{refflat_file} = $opt{genome}.'/rnor50.refFlat.gz';
+#     $opt{intervallist} = $opt{genome}.'/rno5_rRNA_intervallist.txt';
+#     $opt{genesizes_file} = $opt{genome}.'/Rattus_norvegicus.Rnor_5.0.71_exon_gene_sizes.txt';
+# } elsif ($SPECIES eq "MOUSE"){
+#     $opt{genome} .= '/Mus_musculus_GRCm38_GATK_illumina_bwa075/STAR/mus_musculus_GRCm38';
+#     $opt{fasta} = $opt{genome}.'/Mm_GRCm38_gatk_sorted.fa';
+#     $opt{gtf_file} = $opt{genome}.'/Mus_musculus.GRCm38.70.gtf';
+#     $opt{refflat_file} = $opt{genome}.'/Mus_musculus_GRCm38.refFlat.gz';
+#     $opt{intervallist} = $opt{genome}.'/Mus_musculus_GRCm38.rRNA.intervallist';
+#     $opt{genesizes_file} = $opt{genome}.'/Mus_musculus.GRCm38.70_exon_gene_sizes.txt';
+# } elsif ($SPECIES eq "ZEBRAFISH"){
+#     $opt{genome} .= '/zfish9/STAR';
+#     $opt{fasta} = $opt{genome}.'/Zv9_66.fa';
+#     $opt{gtf_file} = $opt{genome}.'/Danio_rerio.Zv9.75.gtf';
+#     $opt{refflat_file} = $opt{genome}.'/zfish9.refFlat.gz';
+#     $opt{intervallist} = $opt{genome}.'/Danio_rerio.Zv9.75.rRNA.intervallist';
+#     $opt{genesizes_file} = $opt{genome}.'/Danio_rerio.Zv9.75_exon_gene_sizes.txt';
+# } elsif ($SPECIES eq "DOG"){
+#     $opt{genome} .= '/CanFam3.1.GATK.illumina/STAR';
+#     $opt{fasta} = $opt{genome}.'/cf3_ens71_GATK.fa';
+#     $opt{gtf_file} = $opt{genome}.'/Canis_familiaris.CanFam3.1.75.gtf';
+#     $opt{refflat_file} = $opt{genome}.'/CanFam3.1.refFlat.gz';
+#     $opt{intervallist} = $opt{genome}.'/CanFam3.1_rRNA_genes.intervallist';
+#     $opt{genesizes_file} = $opt{genome}.'/Canis_familiaris.CanFam3.1.75_exon_gene_sizes.txt';
+# } else {
+#     die "[ERROR] Wrong species ($SPECIES). Only HUMAN, RAT, MOUSE, DOG or ZEBRAFISH genomes are allowed.\n"
+# }
+
 if ($SPECIES eq "HUMAN"){
-    $opt{genome} .= '/Homo_sapiens.GRCh37.GATK.illumina/STAR';
-    $opt{fasta} = $opt{genome}.'/hg19.fa';
+    $opt{genome} .= '/HUMAN/STAR';
+    $opt{fasta} = $opt{genome}.'/Homo_sapiens.GRCh37.GATK.illumina.fa';
     $opt{gtf_file} = $opt{genome}.'/Homo_sapiens.GRCh37.74.gtf';
     $opt{refflat_file} = $opt{genome}.'/hg19.refFlat.gz';
     $opt{intervallist} = $opt{genome}.'/Homo_sapiens.GRCh37.GATK.illumina.rRNA.intervallist';
     $opt{genesizes_file} = $opt{genome}.'/Homo_sapiens.GRCh37.74_exon_gene_sizes.txt';
 } elsif ($SPECIES eq "RAT"){
-    $opt{genome} .= '/rat_GATK_illumina_rnor_50/STAR';
-    $opt{fasta} = $opt{genome}.'/rat_GATK_illumina_rnor_50/STAR/rnor50.fa';
+    $opt{genome} .= '/RAT/STAR';
+    $opt{fasta} = $opt{genome}.'/Rn_Rn05_ill_gatk_sorted.fa';
     $opt{gtf_file} = $opt{genome}.'/Rattus_norvegicus.Rnor_5.0.71.gtf';
     $opt{refflat_file} = $opt{genome}.'/rnor50.refFlat.gz';
     $opt{intervallist} = $opt{genome}.'/rno5_rRNA_intervallist.txt';
     $opt{genesizes_file} = $opt{genome}.'/Rattus_norvegicus.Rnor_5.0.71_exon_gene_sizes.txt';
 } elsif ($SPECIES eq "MOUSE"){
-    $opt{genome} .= '/Mus_musculus_GRCm38_GATK_illumina_bwa075/STAR/mus_musculus_GRCm38';
+    $opt{genome} .= '/MOUSE/STAR';
     $opt{fasta} = $opt{genome}.'/Mm_GRCm38_gatk_sorted.fa';
     $opt{gtf_file} = $opt{genome}.'/Mus_musculus.GRCm38.70.gtf';
     $opt{refflat_file} = $opt{genome}.'/Mus_musculus_GRCm38.refFlat.gz';
     $opt{intervallist} = $opt{genome}.'/Mus_musculus_GRCm38.rRNA.intervallist';
     $opt{genesizes_file} = $opt{genome}.'/Mus_musculus.GRCm38.70_exon_gene_sizes.txt';
 } elsif ($SPECIES eq "ZEBRAFISH"){
-    $opt{genome} .= '/zfish9/STAR';
+    $opt{genome} .= '/ZEBRAFISH/STAR';
     $opt{fasta} = $opt{genome}.'/Zv9_66.fa';
     $opt{gtf_file} = $opt{genome}.'/Danio_rerio.Zv9.75.gtf';
     $opt{refflat_file} = $opt{genome}.'/zfish9.refFlat.gz';
     $opt{intervallist} = $opt{genome}.'/Danio_rerio.Zv9.75.rRNA.intervallist';
     $opt{genesizes_file} = $opt{genome}.'/Danio_rerio.Zv9.75_exon_gene_sizes.txt';
 } elsif ($SPECIES eq "DOG"){
-    $opt{genome} .= '/CanFam3.1.GATK.illumina/STAR';
+    $opt{genome} .= '/DOG/STAR';
     $opt{fasta} = $opt{genome}.'/cf3_ens71_GATK.fa';
     $opt{gtf_file} = $opt{genome}.'/Canis_familiaris.CanFam3.1.75.gtf';
     $opt{refflat_file} = $opt{genome}.'/CanFam3.1.refFlat.gz';
     $opt{intervallist} = $opt{genome}.'/CanFam3.1_rRNA_genes.intervallist';
     $opt{genesizes_file} = $opt{genome}.'/Canis_familiaris.CanFam3.1.75_exon_gene_sizes.txt';
 } else {
-    die "[ERROR] Wrong species ($SPECIES). Only HUMAN, RAT, MOUSE, DOG or ZEBRAFISH genomes are allowed.\n"
+    die "[ERROR] Wrong species ($SPECIES). Only HUMAN, RAT, MOUSE, DOG or ZEBRAFISH genomes are allowed.\n";
 }
 
 
@@ -215,42 +257,76 @@ foreach my $f (@samplefiles){
     push(@{$samples->{$sample}}, $f);
         
     if(! -e "$rundir"){
-	make_path($rundir) or die "Couldn't create directory: $rundir\n";
+	make_path($rundir) or die "Couldn't create run directory: $rundir\n";
     }
     if(! -e "$rundir/read_counts" && $opt{count} ne 'no'){
-	mkdir("$rundir/read_counts") or die "Couldn't create directory: $rundir/read_counts\n";
+	mkdir("$rundir/read_counts") or die "Couldn't create readcount directory: $rundir/read_counts\n";
+    }
+    if(! -e "$rundir/logs"){
+	mkdir("$rundir/logs") or die "Couldn't create logs directory: $rundir/logs\n";
+    }
+    if(! -e "$rundir/jobs"){
+	mkdir("$rundir/jobs") or die "Couldn't create jobs directory: $rundir/jobs\n";
     }
     if(! -e "$rundir/$sample"){
-	mkdir("$rundir/$sample") or die "Couldn't create directory: $rundir/$sample\n";
+	mkdir("$rundir/$sample") or die "Couldn't create sample directory: $rundir/$sample\n";
     }
     if(! -e "$rundir/$sample/fastqc" && $opt{fastqc} ne 'no'){
-        mkdir("$rundir/$sample/fastqc") or die "Couldn't create directory: $rundir/$sample/fastqc\n";
+        mkdir("$rundir/$sample/fastqc") or die "Couldn't create fastqc directory: $rundir/$sample/fastqc\n";
     }
     if(! -e "$rundir/$sample/mapping" && $opt{mapping} ne 'no'){
-        mkdir("$rundir/$sample/mapping") or die "Couldn't create directory: $rundir/$sample/mapping\n";
+        mkdir("$rundir/$sample/mapping") or die "Couldn't create mapping directory: $rundir/$sample/mapping\n";
     }
     if(! -e "$rundir/$sample/read_counts" && $opt{count} ne 'no'){
-	mkdir("$rundir/$sample/read_counts") or die "Couldn't create directory: $rundir/$sample/read_counts\n";
+	mkdir("$rundir/$sample/read_counts") or die "Couldn't create readcounts directory: $rundir/$sample/read_counts\n";
     }
     if(! -e "$rundir/$sample/jobs"){
-        mkdir("$rundir/$sample/jobs") or die "Couldn't create directory: $rundir/$sample/jobs\n";
+        mkdir("$rundir/$sample/jobs") or die "Couldn't create jobs directory: $rundir/$sample/jobs\n";
     }
     if(! -e "$rundir/$sample/logs"){
-        mkdir("$rundir/$sample/logs") or die "Couldn't create directory: $rundir/$sample/logs\n";
+        mkdir("$rundir/$sample/logs") or die "Couldn't create logs directory: $rundir/$sample/logs\n";
     }
 }
+
+
+
+## ======================================
+## Create settings file
+## ======================================
+
+open SETTINGS, ">$rundir/settings.txt" or die "Cannot open settings file!\n";
+my $datestring = localtime();
+print SETTINGS "$datestring\n\n";
+print SETTINGS "SPECIES=$opt{species}\n";
+print SETTINGS "RUNNAME=".basename($rundir)."\n";
+print SETTINGS "FASTQC=$opt{fastqc}\n";
+print SETTINGS "MAPPING=$opt{mapping}\n";
+print SETTINGS "FUSION=$opt{fusionSearch}\n";
+print SETTINGS "COUNTING=$opt{count}\n";
+print SETTINGS "RPKM=$opt{rpkm}\n";
+print SETTINGS "BAMQC=$opt{bamqc}\n";
+close SETTINGS;
+
+
 
 ## ======================================
 ## Create jobs
 ## ======================================
 
-my $mainJobID = "$rundir/".get_job_id()."_qsub.sh";
+my $mainJobID = "$rundir/jobs/".get_job_id()."_qsub.sh";
 open QSUB, ">$mainJobID";
-print QSUB "\#!/bin/sh\n\#\$ \-o $rundir\n\#\$ \-e $rundir\n\n";
+print QSUB "\#!/bin/sh\n\#\$ \-o $rundir/logs\n\#\$ \-e $rundir/logs\n\n";
+
+#cleanup script
+my ($clean_job_id) = ("clean_".get_job_id());
+open CL, ">$rundir/jobs/$clean_job_id.sh";
+print CL "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
+print CL "uname -n > $rundir/logs/$clean_job_id.host\n";
 
 my @hold_ids=();
 my @hold_mapping_ids=();
 my $paired = 0;
+my $runname = basename( $rundir );
 
 foreach my $sample (keys %{$samples}) {
 	print "\nFiles for sample $sample:\n";
@@ -264,7 +340,7 @@ foreach my $sample (keys %{$samples}) {
 	print STAR_SH "mkdir -p $rundir/$sample/mapping/tmp/$job_id/\n";
 	print STAR_SH "cd $rundir/$sample/mapping/tmp/$job_id/\n\n";
 	#Create STAR command
-	my $star_command = "$opt{star_path} --genomeDir $opt{genome} --runThreadN $opt{nthreads} --outFileNamePrefix $sample\_ --outReadsUnmapped Fastx --readFilesCommand zcat";
+	my $star_command = "$opt{star_path} --genomeDir $opt{genome} --runThreadN $opt{nthreads} --outFileNamePrefix $sample\_ --outReadsUnmapped Fastx --outSAMtype BAM SortedByCoordinate --readFilesCommand zcat";
 	if ($opt{stranded} eq "no"){
 	    $star_command .= " --outSAMstrandField intronMotif";
 	}
@@ -300,6 +376,7 @@ foreach my $sample (keys %{$samples}) {
 	    $SM = $cols[0];
 	    $PL = 'ILLUMINA';
 	    
+	    #determine paired or single end
 	    if (-e $R2) {
 		$paired = 1;
 		$R1_fastqs .= "$R1,";
@@ -325,7 +402,7 @@ foreach my $sample (keys %{$samples}) {
 		print FASTQC "uname -n > ../logs/$FastQC1_job_id.host\n";
 		print FASTQC "echo \"FastQC\t\" `date` >> ../logs/FastQC_$sample.host\n";
 		print FASTQC "$opt{fastqc_path} $R1 -o $rundir/$sample/fastqc\n";
-		print QSUB "qsub -q veryshort -o $rundir/$sample/logs -e $rundir/$sample/logs -N $FastQC1_job_id $rundir/$sample/jobs/$FastQC1_job_id.sh\n";
+		print QSUB "qsub -q veryshort -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $FastQC1_job_id $rundir/$sample/jobs/$FastQC1_job_id.sh\n";
 		close FASTQC;
 		
 		
@@ -336,7 +413,7 @@ foreach my $sample (keys %{$samples}) {
 		    print FASTQC2 "uname -n > ../logs/$FastQC2_job_id.host\n";
 		    print FASTQC2 "echo \"FastQC\t\" `date` >> ../logs/FastQC2_$sample.host\n";
 		    print FASTQC2 "$opt{fastqc_path} $R2 -o $rundir/$sample/fastqc\n";
-		    print QSUB "qsub -q veryshort -o $rundir/$sample/logs -e $rundir/$sample/logs -N $FastQC2_job_id $rundir/$sample/jobs/$FastQC2_job_id.sh\n";
+		    print QSUB "qsub -q veryshort -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $FastQC2_job_id $rundir/$sample/jobs/$FastQC2_job_id.sh\n";
 		    close FASTQC2;
 		}
 	    }
@@ -352,22 +429,14 @@ foreach my $sample (keys %{$samples}) {
 	#Print STAR command to star submission script
 	print STAR_SH $star_command;
 
-	#Sambamba
-	#sam to bam
-	print STAR_SH "$opt{sambamba_path} view -t $opt{nthreads} -S -f bam $rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.out.sam > $rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.out.bam\n";
-	
 	#Add read groups using picard
-	print STAR_SH "java -jar $opt{picard_path}\/AddOrReplaceReadGroups.jar INPUT=$rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.out.bam OUTPUT=$rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.out.rgAdded.bam RGID=$ID RGLB=$LB RGPL=$PL RGPU=$PU RGSM=$SM\n";
+	print STAR_SH "java -jar $opt{picard_path}\/AddOrReplaceReadGroups.jar INPUT=$rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.sortedByCoord.out.bam OUTPUT=$rundir/$sample/mapping/$sample\_sorted.bam RGID=$ID RGLB=$LB RGPL=$PL RGPU=$PU RGSM=$SM\n";
 
 	#sort & index bam
-	print STAR_SH "$opt{sambamba_path} sort -t $opt{nthreads} -o $rundir/$sample/mapping/$sample\_sorted.bam $rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.out.rgAdded.bam\n";
 	print STAR_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sorted.bam\n";
 
-	#sort bam by name (needed for htseq count)
-# 	print STAR_SH "$opt{sambamba_path} sort -n -t $opt{nthreads} -o $rundir/$sample/mapping/$sample\_sorted_byName.bam $rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.out.rgAdded.bam\n";
-	
 	if ( $opt{uniq} eq 'yes' ){
-	    print STAR_SH "$opt{sambamba_path} view -t $opt{nthreads} -f bam -F \"not secondary_alignment\" $rundir/$sample/mapping/$sample\_sorted.bam >$rundir/$sample/mapping/$sample\_sorted_uniq.bam\n";
+	    print STAR_SH "$opt{sambamba_path} view -t $opt{nthreads} -f bam -F \"not secondary_alignment\" $rundir/$sample/mapping/$sample\_sorted.bam > $rundir/$sample/mapping/$sample\_sorted_uniq.bam\n";
 	    print STAR_SH "java -Xmx2g  -jar $opt{picard_path}\/MarkDuplicates.jar INPUT=$rundir/$sample/mapping/$sample\_sorted_uniq.bam OUTPUT=$rundir/$sample/mapping/$sample\_sorted_uniq_markDup.bam METRICS_FILE=$rundir/$sample/mapping/$sample\_sorted_uniq_markDup_metrics.txt\n";
 	    print STAR_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sorted_uniq.bam\n";
 	    print STAR_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sorted_uniq_markDup.bam\n";
@@ -375,19 +444,17 @@ foreach my $sample (keys %{$samples}) {
 	}
 
 	#remove and move files
-	print STAR_SH "rm $rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.out.sam\n";
-	print STAR_SH "rm $rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.out.bam\n";
-	print STAR_SH "rm $rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.out.rgAdded.bam\n";
+	print CL "rm $rundir/$sample/mapping/$sample\_Aligned.sortedByCoord.out.bam\n";
 	print STAR_SH "mv $rundir/$sample/mapping/tmp/$job_id/* $rundir/$sample/mapping/\n";
-	print STAR_SH "rm -r $rundir/$sample/mapping/tmp\n";
-	print STAR_SH "rm -r $rundir/$sample/mapping/$sample\__tmp\n";
+	print CL "rm -r $rundir/$sample/mapping/tmp\n";
+	print CL "rm -r $rundir/$sample/mapping/$sample\__STARtmp\n";
 	
 	close STAR_SH;
 	
 	print QSUB "\n";
 	
 	if ($opt{mapping} eq "yes") {
-	    print QSUB "qsub -q short -pe threaded $opt{nthreads} -o $rundir/$sample/logs -e $rundir/$sample/logs -N $job_id $rundir/$sample/jobs/$job_id.sh\n\n";
+	    print QSUB "qsub -q short -pe threaded $opt{nthreads} -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $job_id $rundir/$sample/jobs/$job_id.sh\n\n";
 	}
 	
 	#get read counts of mapped reads
@@ -397,11 +464,6 @@ foreach my $sample (keys %{$samples}) {
 	    open HT,">$rundir/$sample/jobs/$HTSeqCount_job_id.sh";
 	    print HT "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
 	    print HT "uname -n > $rundir/$sample/logs/htseqCount_$sample.host\n";
-	    
-# 	    my $file = "$rundir/$sample/mapping/$sample\_sorted_byName.bam";
-# 	    if ($opt{mapping} eq "no" && ! -e $file) {
-# 		print HT "$opt{sambamba_path} sort -n -t $opt{nthreads} -o $rundir/$sample/mapping/$sample\_sorted_byName.bam $rundir/$sample/mapping/$sample\_sorted.bam\n";
-# 	    }
 	    
 	    #set correct strandedness for htseq count
 	    my $s_val;
@@ -415,56 +477,85 @@ foreach my $sample (keys %{$samples}) {
 		$s_val = 'no' if $opt{stranded} eq "no";
 	    }
 	    
-# 	    print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sorted_byName.bam | $opt{python_path} -m HTSeq.scripts.count -m union -s $s_val -i $opt{id} - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_counts.txt\n";
 	    print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sorted.bam | $opt{python_path} -m HTSeq.scripts.count -m union -r pos -s $s_val -i $opt{id} - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_counts.txt\n";
 
-# 	    print HT "rm $rundir/$sample/mapping/$sample\_sorted_byName.bam*\n";
 	    close HT;
 	    if ( $opt{mapping} eq "no" ){
-		print QSUB  "qsub -q veryshort -o $rundir/$sample/logs -e $rundir/$sample/logs -N $HTSeqCount_job_id $rundir/$sample/jobs/$HTSeqCount_job_id.sh\n\n";
+		print QSUB  "qsub -q veryshort -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $HTSeqCount_job_id $rundir/$sample/jobs/$HTSeqCount_job_id.sh\n\n";
 	    }else{
-		print QSUB  "qsub -q veryshort -o $rundir/$sample/logs -e $rundir/$sample/logs -N $HTSeqCount_job_id -hold_jid $job_id $rundir/$sample/jobs/$HTSeqCount_job_id.sh\n\n";
+		print QSUB  "qsub -q veryshort -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $HTSeqCount_job_id -hold_jid $job_id $rundir/$sample/jobs/$HTSeqCount_job_id.sh\n\n";
 	    }
 	}
 }
 
-if ( $opt{normalize} eq "yes"){
-    #merge count tables of all samples and normalize the merged table
-    my ($normTables_job_id) = ("normTables_".get_job_id());
-    open MT,">$rundir/$normTables_job_id.sh";
+if ( $opt{merge} eq "yes" ){
+    #merge count tables of all samples
+    my ($mergeTables_job_id) = ("mergeTables_".get_job_id());
+    open MT,">$rundir/jobs/$mergeTables_job_id.sh";
     print MT "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
-    print MT "uname -n > $rundir/$normTables_job_id.host\n";
+    print MT "uname -n > $rundir/logs/$mergeTables_job_id.host\n";
     print MT "export MODULEPATH=\$HOME/modules:/hpc/local/CentOS6/cog_bioinf/modules:\${MODULEPATH}\n";
     print MT "module load R_3.1.2\n";
-    normalizeRscript($rundir);
-    print MT "time R --save < $rundir/normalize.R\n";
+    mergeRscript($rundir);
+    print MT "time R --save < $rundir/jobs/merge.R\n";
     print MT "module unload R_3.1.2\n";
     close MT;
     my $hold_line = join ',',@hold_ids;
-    print QSUB "qsub -q veryshort -o $rundir -e $rundir -N $normTables_job_id -hold_jid $hold_line $rundir/$normTables_job_id.sh\n\n";
+    if ( $hold_line eq '' ){
+	print QSUB "qsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $mergeTables_job_id $rundir/jobs/$mergeTables_job_id.sh\n\n";
+    } else {
+	print QSUB "qsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $mergeTables_job_id -hold_jid $hold_line $rundir/jobs/$mergeTables_job_id.sh\n\n";
+    }
+    push (@hold_ids, $mergeTables_job_id);
+}
+
+if ( $opt{normalize} eq "yes"){
+    #normalize the merged count table
+    my ($normTables_job_id) = ("normTables_".get_job_id());
+    open NM,">$rundir/jobs/$normTables_job_id.sh";
+    print NM "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
+    print NM "uname -n > $rundir/logs/$normTables_job_id.host\n";
+    print NM "export MODULEPATH=\$HOME/modules:/hpc/local/CentOS6/cog_bioinf/modules:\${MODULEPATH}\n";
+    print NM "module load R_3.1.2\n";
+    normalizeRscript($rundir);
+    print NM "time R --save < $rundir/jobs/normalize.R\n";
+    print NM "module unload R_3.1.2\n";
+    close NM;
+    my $hold_line = join ',',@hold_ids;
+    if ( $hold_line eq '' ){
+	print QSUB "qsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $normTables_job_id $rundir/jobs/$normTables_job_id.sh\n\n";
+    } else {
+	print QSUB "qsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $normTables_job_id -hold_jid $hold_line $rundir/jobs/$normTables_job_id.sh\n\n";
+    }
     push (@hold_ids, $normTables_job_id);
 }
 
 if( $opt{rpkm} eq "yes"){
+    #calculate rpkm's from merged count table
     my ($rpkm_job_id) = ("rpkm_".get_job_id());
-    open RP, ">$rundir/$rpkm_job_id.sh";
+    open RP, ">$rundir/jobs/$rpkm_job_id.sh";
     print RP "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
-    print RP "uname -n > $rundir/$rpkm_job_id.host\n";
+    print RP "uname -n > $rundir/logs/$rpkm_job_id.host\n";
     print RP "export MODULEPATH=\$HOME/modules:/hpc/local/CentOS6/cog_bioinf/modules:\${MODULEPATH}\n";
     print RP "module load R_3.1.2\n";
     rpkmRscript($rundir);
-    print RP "time R --save --args $rundir < $rundir/rpkm.R\n";
+    print RP "time R --save --args $rundir < $rundir/jobs/rpkm.R\n";
     print RP "module unload R_3.1.2\n";
     close RP;
     my $hold_line = join ',',@hold_ids;
-    print QSUB "qsub -q veryshort -o $rundir -e $rundir -N $rpkm_job_id -hold_jid $hold_line $rundir/$rpkm_job_id.sh\n\n";    
+    if ( $hold_line eq '' ){
+	print QSUB "qsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $rpkm_job_id $rundir/jobs/$rpkm_job_id.sh\n\n";    
+    } else {
+	print QSUB "qsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $rpkm_job_id -hold_jid $hold_line $rundir/jobs/$rpkm_job_id.sh\n\n";    
+    }
 }
 
 if ( $opt{bamqc} eq "yes"){
+    #invoke bamMetrics
     my ($bamQC_job_id) = ("bamQC_".get_job_id());
-    open BQ, ">$rundir/$bamQC_job_id.sh";
+    open BQ, ">$rundir/jobs/$bamQC_job_id.sh";
     print BQ "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
-    print BQ "uname -n > $rundir/$bamQC_job_id.host\n";
+    print BQ "uname -n > $rundir/logs/$bamQC_job_id.host\n";
 
     my $picard_strand;
     if ( $paired==1 ){
@@ -476,8 +567,6 @@ if ( $opt{bamqc} eq "yes"){
 	$picard_strand = 'SECOND_READ_TRANSCRIPTION_STRAND' if $opt{stranded} eq 'reversed';
 	$picard_strand = 'NONE' if $opt{stranded} eq 'no';
     }
-    
-    my $runname = basename( $rundir );
     
     print BQ "shopt -s nullglob\n\n";
     print BQ "filearray=(\"$rundir\"/*/mapping/*_sorted.bam)\n\n";
@@ -491,12 +580,20 @@ if ( $opt{bamqc} eq "yes"){
     }
     close BQ;
     if ( $opt{mapping} eq "no" ){
-	print QSUB "qsub -q veryshort -o $rundir -e $rundir -N $bamQC_job_id $rundir/$bamQC_job_id.sh\n\n";
+	print QSUB "qsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $bamQC_job_id $rundir/jobs/$bamQC_job_id.sh\n\n";
     }else{
 	my $hold_line = join ',',@hold_mapping_ids;
-	print QSUB "qsub -q veryshort -o $rundir -e $rundir -N $bamQC_job_id -hold_jid $hold_line $rundir/$bamQC_job_id.sh\n\n";
+	print QSUB "qsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $bamQC_job_id -hold_jid $hold_line $rundir/jobs/$bamQC_job_id.sh\n\n";
     }
+    
+    #cleaning
+    print CL "if [ -f $rundir/bamMetrics/$runname.bamMetrics.pdf ]; then rm -r $rundir/bamMetrics/tmp; fi\n";
+    close CL;
+    
+    print QSUB "qsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $clean_job_id -hold_jid $bamQC_job_id $rundir/jobs/$clean_job_id.sh\n\n";
 }
+
+
 
 
 close QSUB;
@@ -506,18 +603,17 @@ system "sh $mainJobID";
 
 ## SUBROUTINES ##
 
-sub normalizeRscript{
+sub mergeRscript{
     my $rundir = shift;
     my $runname = basename($rundir);
-    open normRscript, ">$rundir/normalize.R" or die "cannot open Rscript\n";
-    print normRscript <<EOS;
-library("DESeq")
+    open mergeRscript, ">$rundir/jobs/merge.R" or die "cannot open merge.R\n";
+    print mergeRscript <<EOS;
 dirs <- list.dirs(path="$rundir",recursive=F,full.names=F)
 nr_cols=0
 sampledir = ''
 for ( dir in dirs ){
     sample=basename(dir)
-    if ( (sample != 'read_counts') && (sample != 'bamMetrics') ){
+    if ( (sample != 'read_counts') && (sample != 'bamMetrics') && (sample != 'logs') && (sample != 'jobs')){
 	nr_cols = nr_cols+1
 	sampledir = dir
     }
@@ -530,7 +626,7 @@ samplenames=c('gene')
 
 for ( dir in dirs ) {
     sample=basename(dir)
-    if ( (sample != 'read_counts') && (sample != 'bamMetrics') ) {
+    if ( (sample != 'read_counts') && (sample != 'bamMetrics') && (sample != 'jobs') && (sample != 'logs') ) {
 	samplenames <- append(samplenames, as.character(sample))
 	countsfile=paste("$rundir/",sample,'/read_counts/',sample,'_htseq_counts.txt',sep="")
 	counts=read.table(countsfile,sep="\\t",header=F)
@@ -552,6 +648,18 @@ colnames(merged_table) <- samplenames
 
 outfile1="$rundir/read_counts/$runname\_readCounts_raw.txt"
 write.table(merged_table,file=outfile1,row.names=F,col.names=T,quote=F,sep="\\t")
+EOS
+    close(mergeRscript);
+}
+
+sub normalizeRscript{
+    my $rundir = shift;
+    my $runname = basename($rundir);
+    open normRscript, ">$rundir/jobs/normalize.R" or die "cannot open Rscript\n";
+    print normRscript <<EOS;
+library("DESeq")
+
+outfile1="$rundir/read_counts/$runname\_readCounts_raw.txt"
 
 
 
@@ -576,7 +684,7 @@ sub rpkmRscript{
     my $rundir = shift;
     my $runname = basename($rundir);
     my $gene_sizes = $opt{genesizes_file};
-    open rpkmRscript, ">$rundir/rpkm.R" or die "cannot open Rscript\n";
+    open rpkmRscript, ">$rundir/jobs/rpkm.R" or die "cannot open Rscript\n";
     print rpkmRscript <<EOS;
 library(edgeR)
 
