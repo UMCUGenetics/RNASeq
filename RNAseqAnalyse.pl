@@ -222,14 +222,19 @@ foreach my $fastqdir (@input){
     print "$fastqdir\n";
     
     if ( ! -e $fastqdir ){ die "$fastqdir does not exist." }
-    
-    open (FIND, "find $fastqdir -name '*_R1_001.fastq.gz' |");
-    while (my $f= <FIND>) {
-	chomp $f;
-	my $pattern = 'Undetermined';
-	push @samplefiles, $f unless $f =~ /$pattern/;
+    my @fastqfiles = glob($fastqdir."/*{/,}*.fastq.gz");
+    foreach my $fastq (@fastqfiles){
+	my $pattern = 'Undertermined';
+	push @samplefiles, $fastq unless $fastq =~ /$pattern/;
     }
-    close FIND;
+    
+#     open (FIND, "find $fastqdir -name '*_R1_001.fastq.gz' |");
+#     while (my $f= <FIND>) {
+# 	chomp $f;
+# 	my $pattern = 'Undetermined';
+# 	push @samplefiles, $f unless $f =~ /$pattern/;
+#     }
+#     close FIND;
 }
 
 if (scalar @samplefiles ==0) {
@@ -305,7 +310,6 @@ print SETTINGS "FUSION=$opt{fusionSearch}\n";
 print SETTINGS "COUNTING=$opt{count}\n";
 print SETTINGS "RPKM=$opt{rpkm}\n";
 print SETTINGS "BAMQC=$opt{bamqc}\n";
-close SETTINGS;
 
 
 
@@ -330,6 +334,7 @@ my $runname = basename( $rundir );
 
 foreach my $sample (keys %{$samples}) {
 	print "\nFiles for sample $sample:\n";
+	print SETTINGS "\nFiles for sample $sample:\n";	
 	my $job_id = "STAR_$sample\_".get_job_id();
 	push @hold_mapping_ids, $job_id;
 	#create bash script for STAR submission of this sample
@@ -366,7 +371,7 @@ foreach my $sample (keys %{$samples}) {
 	foreach my $fastq (@{$samples->{$sample}}){
 	    my $R1 = $fastq;
 	    my $R2 = $fastq;
-	    $R2 =~ s/R1_001/R2_001/;
+	    $R2 =~ s/_R1_/_R2_/;
 	    
 	    my $fastqname = basename($R1);
 	    my @cols = split("_",$fastqname);
@@ -385,10 +390,15 @@ foreach my $sample (keys %{$samples}) {
 		print "Pair found:\n";
 		print $R1," = R1\n";
 		print $R2," = R2\n\n";
+		print SETTINGS "Pair found:\n";
+		print SETTINGS $R1," = R1\n";
+		print SETTINGS $R2," = R2\n\n";
 	    }else{
 		$rest_fastqs .= "$R1,";
 		print "Single tag found\n";
 		print $R1," = R1\n";
+		print SETTINGS "Single tag found\n";
+		print SETTINGS $R1," = R1\n";
 	    }
 	    
 	    #FASTQC
@@ -593,11 +603,12 @@ if ( $opt{bamqc} eq "yes"){
     print QSUB "qsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $clean_job_id -hold_jid $bamQC_job_id $rundir/jobs/$clean_job_id.sh\n\n";
 }
 
+close SETTINGS;
 
 
 
 close QSUB;
-system "sh $mainJobID";
+# system "sh $mainJobID";
 
 
 
