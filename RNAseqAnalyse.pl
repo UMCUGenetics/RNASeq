@@ -223,7 +223,7 @@ foreach my $fastqdir (@input){
     
     if ( ! -e $fastqdir ){ die "$fastqdir does not exist." }
     
-    open (FIND, "find $fastqdir -name '*_R1_*.fastq.gz' |");
+    open (FIND, "find $fastqdir -name '*_R1_001.fastq.gz' |");
     while (my $f= <FIND>) {
 	chomp $f;
 	my $pattern = 'Undetermined';
