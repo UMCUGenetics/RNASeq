@@ -608,7 +608,7 @@ close SETTINGS;
 
 
 close QSUB;
-# system "sh $mainJobID";
+system "sh $mainJobID";
 
 
 
