@@ -71,8 +71,8 @@ my %opt;
     'outSJfilterIntronMaxVsReadN'	=> 10000000,
     'chimJunctionOverhangMin'		=> 15,
     'species'				=> "HUMAN",
-#     'genome'				=> '/hpc/cog_bioinf/GENOMES',
-    'genome'				=> '/hpc/cog_bioinf/data/annelies/RNA_Seq/GENOMES',
+    'genome'				=> '/hpc/cog_bioinf/GENOMES/STAR',
+#     'genome'				=> '/hpc/cog_bioinf/data/annelies/RNA_Seq/GENOMES',
     'fasta'				=> undef,
     'intervallist'			=> undef,
     'gtf_file'				=> undef,
@@ -130,75 +130,37 @@ die "[ERROR] Wrong option ($opt{uniq}) given with -uniq. Must be \"yes\" or \"no
 die "[ERROR] Wrong option ($opt{id}) given with -id. Must be \"gene_id\", \"transcript_id\" or \"exon_id\".\n" if ( ($opt{id} ne "gene_id") && ($opt{id} ne "transcript_id") && ($opt{id} ne "exon_id") );
 
 my $SPECIES = uc $opt{species};
-# if ($SPECIES eq "HUMAN"){
-#     $opt{genome} .= '/Homo_sapiens.GRCh37.GATK.illumina/STAR';
-#     $opt{fasta} = $opt{genome}.'/hg19.fa';
-#     $opt{gtf_file} = $opt{genome}.'/Homo_sapiens.GRCh37.74.gtf';
-#     $opt{refflat_file} = $opt{genome}.'/hg19.refFlat.gz';
-#     $opt{intervallist} = $opt{genome}.'/Homo_sapiens.GRCh37.GATK.illumina.rRNA.intervallist';
-#     $opt{genesizes_file} = $opt{genome}.'/Homo_sapiens.GRCh37.74_exon_gene_sizes.txt';
-# } elsif ($SPECIES eq "RAT"){
-#     $opt{genome} .= '/rat_GATK_illumina_rnor_50/STAR';
-#     $opt{fasta} = $opt{genome}.'/rat_GATK_illumina_rnor_50/STAR/rnor50.fa';
-#     $opt{gtf_file} = $opt{genome}.'/Rattus_norvegicus.Rnor_5.0.71.gtf';
-#     $opt{refflat_file} = $opt{genome}.'/rnor50.refFlat.gz';
-#     $opt{intervallist} = $opt{genome}.'/rno5_rRNA_intervallist.txt';
-#     $opt{genesizes_file} = $opt{genome}.'/Rattus_norvegicus.Rnor_5.0.71_exon_gene_sizes.txt';
-# } elsif ($SPECIES eq "MOUSE"){
-#     $opt{genome} .= '/Mus_musculus_GRCm38_GATK_illumina_bwa075/STAR/mus_musculus_GRCm38';
-#     $opt{fasta} = $opt{genome}.'/Mm_GRCm38_gatk_sorted.fa';
-#     $opt{gtf_file} = $opt{genome}.'/Mus_musculus.GRCm38.70.gtf';
-#     $opt{refflat_file} = $opt{genome}.'/Mus_musculus_GRCm38.refFlat.gz';
-#     $opt{intervallist} = $opt{genome}.'/Mus_musculus_GRCm38.rRNA.intervallist';
-#     $opt{genesizes_file} = $opt{genome}.'/Mus_musculus.GRCm38.70_exon_gene_sizes.txt';
-# } elsif ($SPECIES eq "ZEBRAFISH"){
-#     $opt{genome} .= '/zfish9/STAR';
-#     $opt{fasta} = $opt{genome}.'/Zv9_66.fa';
-#     $opt{gtf_file} = $opt{genome}.'/Danio_rerio.Zv9.75.gtf';
-#     $opt{refflat_file} = $opt{genome}.'/zfish9.refFlat.gz';
-#     $opt{intervallist} = $opt{genome}.'/Danio_rerio.Zv9.75.rRNA.intervallist';
-#     $opt{genesizes_file} = $opt{genome}.'/Danio_rerio.Zv9.75_exon_gene_sizes.txt';
-# } elsif ($SPECIES eq "DOG"){
-#     $opt{genome} .= '/CanFam3.1.GATK.illumina/STAR';
-#     $opt{fasta} = $opt{genome}.'/cf3_ens71_GATK.fa';
-#     $opt{gtf_file} = $opt{genome}.'/Canis_familiaris.CanFam3.1.75.gtf';
-#     $opt{refflat_file} = $opt{genome}.'/CanFam3.1.refFlat.gz';
-#     $opt{intervallist} = $opt{genome}.'/CanFam3.1_rRNA_genes.intervallist';
-#     $opt{genesizes_file} = $opt{genome}.'/Canis_familiaris.CanFam3.1.75_exon_gene_sizes.txt';
-# } else {
-#     die "[ERROR] Wrong species ($SPECIES). Only HUMAN, RAT, MOUSE, DOG or ZEBRAFISH genomes are allowed.\n"
-# }
 
 if ($SPECIES eq "HUMAN"){
-    $opt{genome} .= '/HUMAN/STAR';
+    $opt{genome} .= '/Homo_sapiens.GRCh37';
     $opt{fasta} = $opt{genome}.'/Homo_sapiens.GRCh37.GATK.illumina.fa';
     $opt{gtf_file} = $opt{genome}.'/Homo_sapiens.GRCh37.74.gtf';
     $opt{refflat_file} = $opt{genome}.'/hg19.refFlat.gz';
     $opt{intervallist} = $opt{genome}.'/Homo_sapiens.GRCh37.GATK.illumina.rRNA.intervallist';
     $opt{genesizes_file} = $opt{genome}.'/Homo_sapiens.GRCh37.74_exon_gene_sizes.txt';
 } elsif ($SPECIES eq "RAT"){
-    $opt{genome} .= '/RAT/STAR';
+    $opt{genome} .= '/Rattus_norvegicus.Rnor50';
     $opt{fasta} = $opt{genome}.'/Rn_Rn05_ill_gatk_sorted.fa';
     $opt{gtf_file} = $opt{genome}.'/Rattus_norvegicus.Rnor_5.0.71.gtf';
     $opt{refflat_file} = $opt{genome}.'/rnor50.refFlat.gz';
     $opt{intervallist} = $opt{genome}.'/rno5_rRNA_intervallist.txt';
     $opt{genesizes_file} = $opt{genome}.'/Rattus_norvegicus.Rnor_5.0.71_exon_gene_sizes.txt';
 } elsif ($SPECIES eq "MOUSE"){
-    $opt{genome} .= '/MOUSE/STAR';
+    $opt{genome} .= '/Mus_musculus.GRCm38';
     $opt{fasta} = $opt{genome}.'/Mm_GRCm38_gatk_sorted.fa';
     $opt{gtf_file} = $opt{genome}.'/Mus_musculus.GRCm38.70.gtf';
     $opt{refflat_file} = $opt{genome}.'/Mus_musculus_GRCm38.refFlat.gz';
     $opt{intervallist} = $opt{genome}.'/Mus_musculus_GRCm38.rRNA.intervallist';
     $opt{genesizes_file} = $opt{genome}.'/Mus_musculus.GRCm38.70_exon_gene_sizes.txt';
 } elsif ($SPECIES eq "ZEBRAFISH"){
-    $opt{genome} .= '/ZEBRAFISH/STAR';
+    $opt{genome} .= '/Danio_rerio.Zv9';
     $opt{fasta} = $opt{genome}.'/Zv9_66.fa';
     $opt{gtf_file} = $opt{genome}.'/Danio_rerio.Zv9.75.gtf';
     $opt{refflat_file} = $opt{genome}.'/zfish9.refFlat.gz';
     $opt{intervallist} = $opt{genome}.'/Danio_rerio.Zv9.75.rRNA.intervallist';
     $opt{genesizes_file} = $opt{genome}.'/Danio_rerio.Zv9.75_exon_gene_sizes.txt';
 } elsif ($SPECIES eq "DOG"){
-    $opt{genome} .= '/DOG/STAR';
+    $opt{genome} .= '/Canis_familiaris.CanFam31';
     $opt{fasta} = $opt{genome}.'/cf3_ens71_GATK.fa';
     $opt{gtf_file} = $opt{genome}.'/Canis_familiaris.CanFam3.1.75.gtf';
     $opt{refflat_file} = $opt{genome}.'/CanFam3.1.refFlat.gz';
