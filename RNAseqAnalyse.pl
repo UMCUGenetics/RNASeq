@@ -31,7 +31,7 @@ sub usage{
     -stranded                         [s]	Is the RNA-seq data from a strand-specific assay? [yes/no/reversed] Default: reversed
     -fusionSearch                     [s]	Want to detect fusion genes? [yes/no] Default: yes
     -c|count                          [s]	Want to count the mapped reads? [yes/no] Default: yes
-    -n|normalize                      [s]	Want to normalize counted reads? [yes/no] Default: no
+    -n|normalize                      [s]	Want to normalize counted reads? [yes/no] Default: yes
     -rpkm                             [s]	Want to retrieve RPKMs? [yes/no] Default: yes
     -bamqc                            [s]	Want to retrieve bam statistics? [yes/no] Default: yes
     -id                               [s]	Which id attribute do you want to count? [gene_id/transcript_id/exon_id] Default: gene_id
@@ -62,7 +62,7 @@ my %opt;
     'fusionSearch'			=> "yes",
     'count'				=> "yes",
     'merge'				=> "yes",
-    'normalize'				=> "no",
+    'normalize'				=> "yes",
     'rpkm'				=> "yes",
     'bamqc'				=> "yes",
     'id'				=> "gene_id",
