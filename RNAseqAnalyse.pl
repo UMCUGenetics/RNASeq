@@ -184,7 +184,7 @@ foreach my $fastqdir (@input){
     print "$fastqdir\n";
     
     if ( ! -e $fastqdir ){ die "$fastqdir does not exist." }
-    my @fastqfiles = glob($fastqdir."/*{/,}*.fastq.gz");
+    my @fastqfiles = glob($fastqdir."/*{/,}*_R1_*.fastq.gz");
     foreach my $fastq (@fastqfiles){
 	my $pattern = 'Undertermined';
 	push @samplefiles, $fastq unless $fastq =~ /$pattern/;
@@ -296,7 +296,7 @@ my $runname = basename( $rundir );
 
 foreach my $sample (keys %{$samples}) {
 	print "\nFiles for sample $sample:\n";
-	print SETTINGS "\nFiles for sample $sample:\n";	
+	print SETTINGS "\nFiles for sample $sample:\n";
 	my $job_id = "STAR_$sample\_".get_job_id();
 	push @hold_mapping_ids, $job_id;
 	#create bash script for STAR submission of this sample
