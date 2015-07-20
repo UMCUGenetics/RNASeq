@@ -5,6 +5,8 @@ use POSIX qw(tmpnam);
 use Getopt::Long;
 use File::Basename;
 use File::Path qw(make_path);
+use Cwd qw(abs_path);
+
 
 ## ======================================
 ## Usage: see -h
@@ -261,9 +263,15 @@ foreach my $f (@samplefiles){
 ## Create settings file
 ## ======================================
 
+#check pipeline version
+my $PIPELINE_PATH = dirname(abs_path($0));
+chdir $PIPELINE_PATH;
+my $PIPELINE_VERSION = qx(git describe --always --tag | cut -d '-' -f 1);
+
 open SETTINGS, ">$rundir/settings.txt" or die "Cannot open settings file!\n";
 my $datestring = localtime();
 print SETTINGS "$datestring\n\n";
+print SETTINGS "VERSION=$PIPELINE_VERSION\n";
 print SETTINGS "SPECIES=$opt{species}\n";
 print SETTINGS "RUNNAME=".basename($rundir)."\n";
 print SETTINGS "FASTQC=$opt{fastqc}\n";
