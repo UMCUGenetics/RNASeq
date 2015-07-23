@@ -474,10 +474,10 @@ if ( $opt{merge} eq "yes" ){
     open MT,">$rundir/jobs/$mergeTables_job_id.sh";
     print MT "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
     print MT "uname -n > $rundir/logs/$mergeTables_job_id.host\n";
-    print MT "export MODULEPATH=\$HOME/modules:/hpc/local/CentOS6/cog_bioinf/modules:\${MODULEPATH}\n";
+    print MT "export MODULEPATH=/hpc/local/CentOS6/cog_bioinf/modules:\${MODULEPATH}\n";
     print MT "module load R_3.1.2\n";
     mergeRscript($rundir);
-    print MT "time R --save < $rundir/jobs/merge.R\n";
+    print MT "time R --save --no-init-file < $rundir/jobs/merge.R\n";
     print MT "module unload R_3.1.2\n";
     close MT;
     my $hold_line = join ',',@hold_ids;
@@ -495,10 +495,10 @@ if ( $opt{normalize} eq "yes"){
     open NM,">$rundir/jobs/$normTables_job_id.sh";
     print NM "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
     print NM "uname -n > $rundir/logs/$normTables_job_id.host\n";
-    print NM "export MODULEPATH=\$HOME/modules:/hpc/local/CentOS6/cog_bioinf/modules:\${MODULEPATH}\n";
+    print NM "export MODULEPATH=/hpc/local/CentOS6/cog_bioinf/modules:\${MODULEPATH}\n";
     print NM "module load R_3.1.2\n";
     normalizeRscript($rundir);
-    print NM "time R --save < $rundir/jobs/normalize.R\n";
+    print NM "time R --save --no-init-file < $rundir/jobs/normalize.R\n";
     print NM "module unload R_3.1.2\n";
     close NM;
     my $hold_line = join ',',@hold_ids;
@@ -516,10 +516,10 @@ if( $opt{rpkm} eq "yes"){
     open RP, ">$rundir/jobs/$rpkm_job_id.sh";
     print RP "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
     print RP "uname -n > $rundir/logs/$rpkm_job_id.host\n";
-    print RP "export MODULEPATH=\$HOME/modules:/hpc/local/CentOS6/cog_bioinf/modules:\${MODULEPATH}\n";
+    print RP "export MODULEPATH=/hpc/local/CentOS6/cog_bioinf/modules:\${MODULEPATH}\n";
     print RP "module load R_3.1.2\n";
     rpkmRscript($rundir);
-    print RP "time R --save --args $rundir < $rundir/jobs/rpkm.R\n";
+    print RP "time R --save --no-init-file --args $rundir < $rundir/jobs/rpkm.R\n";
     print RP "module unload R_3.1.2\n";
     close RP;
     my $hold_line = join ',',@hold_ids;
