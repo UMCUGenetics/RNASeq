@@ -6,7 +6,8 @@ use Getopt::Long;
 use File::Basename;
 use File::Path qw(make_path);
 use Cwd qw(abs_path);
-
+use List::MoreUtils qw(uniq);
+use Time::localtime;
 
 ## ======================================
 ## Usage: see -h
@@ -33,14 +34,24 @@ sub usage{
     -stranded                         [s]	Is the RNA-seq data from a strand-specific assay? [yes/no/reversed] Default: reversed
     -fusionSearch                     [s]	Want to detect fusion genes? [yes/no] Default: yes
     -c|count                          [s]	Want to count the mapped reads? [yes/no] Default: yes
+    -id                               [s]	Which id attribute do you want to count? [gene_id/transcript_id/exon_id/all] Default: gene_id
     -n|normalize                      [s]	Want to normalize counted reads? [yes/no] Default: yes
     -rpkm                             [s]	Want to retrieve RPKMs? [yes/no] Default: yes
+    -de                               [s]	Want to perform DE analysis? [yes/no] Default: no
+    -design                           [s]	File with study desing [/path/to/studydesign.txt] (see description below for lay-out)
     -bamqc                            [s]	Want to retrieve bam statistics? [yes/no] Default: yes
-    -id                               [s]	Which id attribute do you want to count? [gene_id/transcript_id/exon_id] Default: gene_id
     -uniq                             [s]	Want to retreive alignment file (BAM) with unique reads? [yes/no] Default: no
     -chimSegmentMin                   [i]	Minimum length of chimeric segment length. [number] Default: 15
     -chimJunctionOverhangMin          [i]	Minimum overhang for a chimeric junction. [number] Default: 15
     -outSJfilterIntronMaxVsReadN      [s]	Maximum gap allowed for junctions supported by 1,2,3...N reads. [number] Default: 10.000.000
+    -debug                            [s]	Do not submit jobs. [yes/no] Default: no
+    
+    Lay-out design file:
+     sample1	test
+     sample2	control
+     sample3	test
+     sample4	test
+     sample5	control
       
 END
   exit;
@@ -55,6 +66,7 @@ END
 my %opt;
 %opt = (
     'help'				=> undef,
+    'debug'				=> undef,
     'input'				=> undef,
     'outputDir'				=> undef,
     'nthreads'				=> 4,
@@ -67,6 +79,8 @@ my %opt;
     'normalize'				=> "yes",
     'rpkm'				=> "yes",
     'bamqc'				=> "yes",
+    'de'				=> "no",
+    'design'				=> undef,
     'id'				=> "gene_id",
     'uniq'				=> "no",
     'chimSegmentMin'			=> 15,
@@ -74,15 +88,13 @@ my %opt;
     'chimJunctionOverhangMin'		=> 15,
     'species'				=> "HUMAN",
     'genome'				=> '/hpc/cog_bioinf/GENOMES/STAR',
-#     'genome'				=> '/hpc/cog_bioinf/data/annelies/RNA_Seq/GENOMES',
     'fasta'				=> undef,
     'intervallist'			=> undef,
     'gtf_file'				=> undef,
     'refflat_file'			=> undef,
     'genesizes_file'			=> undef,
     'fastqc_path'			=> '/hpc/cog_bioinf/common_scripts/FastQC/fastqc',
-#     'star_path'				=> '/hpc/local/CentOS6/cog_bioinf/STAR_2.3.0e/STAR',
-    'star_path'				=> '/hpc/local/CentOS6/cog_bioinf/STAR-STAR_2.4.1d/source/STAR',
+    'star_path'				=> '/hpc/local/CentOS6/cog_bioinf/STAR-STAR_2.4.2a/source/STAR',
     'sambamba_path'			=> '/hpc/cog_bioinf/common_scripts/sambamba_v0.5.4/sambamba_v0.5.4',
     'picard_path'			=> '/hpc/cog_bioinf/common_scripts/picard-tools-1.98',
     'python_path'			=> '/hpc/local/CentOS6/cog_bioinf/Python-2.7.6/bin/python2.7',
@@ -92,6 +104,7 @@ my %opt;
 die usage() if @ARGV == 0;
 GetOptions (
     'h|help'				=> \$opt{help},
+    'debug'				=> \$opt{debug},
     'i|input=s@'			=> \$opt{input},
     'o|outputDir=s'			=> \$opt{outputDir},
     'pe|nthreads=i'			=> \$opt{nthreads},
@@ -105,6 +118,8 @@ GetOptions (
     'merge=s'				=> \$opt{merge},
     'n|normalize=s'			=> \$opt{normalize},
     'rpkm=s'				=> \$opt{rpkm},
+    'de=s'				=> \$opt{de},
+    'design=s'				=> \$opt{design},
     'bamqc=s'				=> \$opt{bamqc},
     'id=s'				=> \$opt{id},
     'uniq=s'				=> \$opt{uniq},
@@ -119,7 +134,7 @@ die usage() if $opt{help};
 die "[ERROR] Number of threads must be at least 3!\n" if ($opt{nthreads} < 3);
 die usage() unless ( $opt{input} );
 die usage() unless ( $opt{outputDir} );
-die "[ERROR] Nothing to do!\n" if ( ($opt{fastqc} eq "no") && ($opt{mapping} eq "no") && ($opt{count} eq "no") && ($opt{normalize} eq "no") && ($opt{rpkm} eq "no") && ($opt{bamqc} eq "no") );
+die "[ERROR] Nothing to do!\n" if ( ($opt{fastqc} eq "no") && ($opt{mapping} eq "no") && ($opt{count} eq "no") && ($opt{normalize} eq "no") && ($opt{rpkm} eq "no") && ($opt{bamqc} eq "no") && ($opt{de} eq "no") );
 die "[ERROR] Wrong option ($opt{fastqc}) given with -fastqc. Must be \"yes\" or \"no\".\n" if ( ($opt{fastqc} ne "no") && ($opt{fastqc} ne "yes") );
 die "[ERROR] Wrong option ($opt{mapping}) given with -mapping. Must be \"yes\" or \"no\".\n" if ( ($opt{mapping} ne "no") && ($opt{mapping} ne "yes") );
 die "[ERROR] Wrong option ($opt{stranded}) given with -stranded. Must be \"yes\", \"no\" or \"reversed\".\n" if ( ($opt{stranded} ne "no") && ($opt{stranded} ne "yes") && ($opt{stranded} ne "reversed") );
@@ -130,8 +145,12 @@ die "[ERROR] Wrong option ($opt{normalize}) given with -normalize. Must be \"yes
 die "[ERROR] Wrong option ($opt{rpkm}) given with -rpkm. Must be \"yes\" or \"no\".\n" if ( ($opt{rpkm} ne "no") && ($opt{rpkm} ne "yes") );
 die "[ERROR] Wrong option ($opt{uniq}) given with -uniq. Must be \"yes\" or \"no\".\n" if ( ($opt{uniq} ne "no") && ($opt{uniq} ne "yes") );
 die "[ERROR] Wrong option ($opt{id}) given with -id. Must be \"gene_id\", \"transcript_id\" or \"exon_id\".\n" if ( ($opt{id} ne "gene_id") && ($opt{id} ne "transcript_id") && ($opt{id} ne "exon_id") );
+die "[ERROR] Must give design (-design) with -de option.\n" if ( ($opt{de} eq "yes") && (! $opt{design}) );
+die "[ERROR] Design file doesn't exist!\n" if ( ($opt{de} eq "yes") && (! -e $opt{design}) );
+die "[ERROR] Design file is not in right format. See -h for lay-out.\n" if ( ($opt{de} eq "yes") && (checkDesign($opt{design}) eq "wrong") );
 
 my $SPECIES = uc $opt{species};
+my %annotationDB = ( 'HUMAN' => 'org.Hs', 'RAT' => 'org.Rn', 'MOUSE' => 'org.Mm', 'ZEBRAFISH' => 'org.Dr', 'DOG' => 'org.Cf' );
 
 if ($SPECIES eq "HUMAN"){
     $opt{genome} .= '/Homo_sapiens.GRCh37';
@@ -163,7 +182,7 @@ if ($SPECIES eq "HUMAN"){
     $opt{genesizes_file} = $opt{genome}.'/Danio_rerio.Zv9.75_exon_gene_sizes.txt';
 } elsif ($SPECIES eq "DOG"){
     $opt{genome} .= '/Canis_familiaris.CanFam31';
-    $opt{fasta} = $opt{genome}.'/cf3_ens71_GATK.fa';
+    $opt{fasta} = $opt{genome}.'/Cf3_ens71_GATK.fa';
     $opt{gtf_file} = $opt{genome}.'/Canis_familiaris.CanFam3.1.75.gtf';
     $opt{refflat_file} = $opt{genome}.'/CanFam3.1.refFlat.gz';
     $opt{intervallist} = $opt{genome}.'/CanFam3.1_rRNA_genes.intervallist';
@@ -191,14 +210,6 @@ foreach my $fastqdir (@input){
 	my $pattern = 'Undertermined';
 	push @samplefiles, $fastq unless $fastq =~ /$pattern/;
     }
-    
-#     open (FIND, "find $fastqdir -name '*_R1_001.fastq.gz' |");
-#     while (my $f= <FIND>) {
-# 	chomp $f;
-# 	my $pattern = 'Undetermined';
-# 	push @samplefiles, $f unless $f =~ /$pattern/;
-#     }
-#     close FIND;
 }
 
 if (scalar @samplefiles ==0) {
@@ -255,6 +266,10 @@ foreach my $f (@samplefiles){
     if(! -e "$rundir/$sample/logs"){
         mkdir("$rundir/$sample/logs") or die "Couldn't create logs directory: $rundir/$sample/logs\n";
     }
+    if(! -e "$rundir/DEanalysis" && $opt{de} eq 'yes'){
+	mkdir("$rundir/DEanalysis") or die "Couldn't create DE analysis directory: $rundir/DEanalysis\n";
+	system("cp $opt{design} $rundir/DEanalysis/");
+    }
 }
 
 
@@ -268,7 +283,12 @@ my $PIPELINE_PATH = dirname(abs_path($0));
 chdir $PIPELINE_PATH;
 my $PIPELINE_VERSION = qx(git describe --always --tag | cut -d '-' -f 1);
 
-open SETTINGS, ">$rundir/settings.txt" or die "Cannot open settings file!\n";
+#copy readme to run directory
+system("cp $PIPELINE_PATH/README.md $rundir");
+
+#write settings info to settings.txt
+my $timestamp = timestamp();
+open SETTINGS, ">$rundir/settings_$timestamp.txt" or die "Cannot open settings file!\n";
 my $datestring = localtime();
 print SETTINGS "$datestring\n\n";
 print SETTINGS "VERSION=$PIPELINE_VERSION\n";
@@ -279,6 +299,7 @@ print SETTINGS "MAPPING=$opt{mapping}\n";
 print SETTINGS "FUSION=$opt{fusionSearch}\n";
 print SETTINGS "COUNTING=$opt{count}\n";
 print SETTINGS "RPKM=$opt{rpkm}\n";
+print SETTINGS "DE=$opt{de}\n";
 print SETTINGS "BAMQC=$opt{bamqc}\n";
 
 
@@ -305,6 +326,7 @@ my $runname = basename( $rundir );
 foreach my $sample (keys %{$samples}) {
 	print "\nFiles for sample $sample:\n";
 	print SETTINGS "\nFiles for sample $sample:\n";
+	print QSUB "\n\n###Submissions for sample $sample:\n";
 	my $job_id = "STAR_$sample\_".get_job_id();
 	push @hold_mapping_ids, $job_id;
 	#create bash script for STAR submission of this sample
@@ -382,7 +404,7 @@ foreach my $sample (keys %{$samples}) {
 		print FASTQC "uname -n > ../logs/$FastQC1_job_id.host\n";
 		print FASTQC "echo \"FastQC\t\" `date` >> ../logs/FastQC_$sample.host\n";
 		print FASTQC "$opt{fastqc_path} $R1 -o $rundir/$sample/fastqc\n";
-		print QSUB "qsub -q veryshort -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $FastQC1_job_id $rundir/$sample/jobs/$FastQC1_job_id.sh\n";
+		print QSUB "##FastQC\nqsub -q veryshort -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $FastQC1_job_id $rundir/$sample/jobs/$FastQC1_job_id.sh\n";
 		close FASTQC;
 		
 		
@@ -393,7 +415,7 @@ foreach my $sample (keys %{$samples}) {
 		    print FASTQC2 "uname -n > ../logs/$FastQC2_job_id.host\n";
 		    print FASTQC2 "echo \"FastQC\t\" `date` >> ../logs/FastQC2_$sample.host\n";
 		    print FASTQC2 "$opt{fastqc_path} $R2 -o $rundir/$sample/fastqc\n";
-		    print QSUB "qsub -q veryshort -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $FastQC2_job_id $rundir/$sample/jobs/$FastQC2_job_id.sh\n";
+		    print QSUB "##FastQC\nqsub -q veryshort -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $FastQC2_job_id $rundir/$sample/jobs/$FastQC2_job_id.sh\n";
 		    close FASTQC2;
 		}
 	    }
@@ -434,7 +456,7 @@ foreach my $sample (keys %{$samples}) {
 	print QSUB "\n";
 	
 	if ($opt{mapping} eq "yes") {
-	    print QSUB "qsub -q short -pe threaded $opt{nthreads} -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $job_id $rundir/$sample/jobs/$job_id.sh\n\n";
+	    print QSUB "##STAR mapping\nqsub -q short -pe threaded $opt{nthreads} -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $job_id $rundir/$sample/jobs/$job_id.sh\n\n";
 	}
 	
 	#get read counts of mapped reads
@@ -461,9 +483,9 @@ foreach my $sample (keys %{$samples}) {
 
 	    close HT;
 	    if ( $opt{mapping} eq "no" ){
-		print QSUB  "qsub -q veryshort -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $HTSeqCount_job_id $rundir/$sample/jobs/$HTSeqCount_job_id.sh\n\n";
+		print QSUB  "##HTSeq-count\nqsub -q veryshort -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $HTSeqCount_job_id $rundir/$sample/jobs/$HTSeqCount_job_id.sh\n\n";
 	    }else{
-		print QSUB  "qsub -q veryshort -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $HTSeqCount_job_id -hold_jid $job_id $rundir/$sample/jobs/$HTSeqCount_job_id.sh\n\n";
+		print QSUB  "##HTSeq-count\nqsub -q veryshort -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $HTSeqCount_job_id -hold_jid $job_id $rundir/$sample/jobs/$HTSeqCount_job_id.sh\n\n";
 	    }
 	}
 }
@@ -482,9 +504,9 @@ if ( $opt{merge} eq "yes" ){
     close MT;
     my $hold_line = join ',',@hold_ids;
     if ( $hold_line eq '' ){
-	print QSUB "qsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $mergeTables_job_id $rundir/jobs/$mergeTables_job_id.sh\n\n";
+	print QSUB "\n##Merge HTSeq-count tables\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $mergeTables_job_id $rundir/jobs/$mergeTables_job_id.sh\n\n";
     } else {
-	print QSUB "qsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $mergeTables_job_id -hold_jid $hold_line $rundir/jobs/$mergeTables_job_id.sh\n\n";
+	print QSUB "\n##Merge HTSeq-count tables\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $mergeTables_job_id -hold_jid $hold_line $rundir/jobs/$mergeTables_job_id.sh\n\n";
     }
     push (@hold_ids, $mergeTables_job_id);
 }
@@ -503,11 +525,10 @@ if ( $opt{normalize} eq "yes"){
     close NM;
     my $hold_line = join ',',@hold_ids;
     if ( $hold_line eq '' ){
-	print QSUB "qsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $normTables_job_id $rundir/jobs/$normTables_job_id.sh\n\n";
+	print QSUB "\n##Normalize counts table\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $normTables_job_id $rundir/jobs/$normTables_job_id.sh\n\n";
     } else {
-	print QSUB "qsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $normTables_job_id -hold_jid $hold_line $rundir/jobs/$normTables_job_id.sh\n\n";
+	print QSUB "\n##Normalize counts table\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $normTables_job_id -hold_jid $hold_line $rundir/jobs/$normTables_job_id.sh\n\n";
     }
-    push (@hold_ids, $normTables_job_id);
 }
 
 if( $opt{rpkm} eq "yes"){
@@ -524,15 +545,36 @@ if( $opt{rpkm} eq "yes"){
     close RP;
     my $hold_line = join ',',@hold_ids;
     if ( $hold_line eq '' ){
-	print QSUB "qsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $rpkm_job_id $rundir/jobs/$rpkm_job_id.sh\n\n";    
+	print QSUB "\n##Calculate RPKMs\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $rpkm_job_id $rundir/jobs/$rpkm_job_id.sh\n\n";    
     } else {
-	print QSUB "qsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $rpkm_job_id -hold_jid $hold_line $rundir/jobs/$rpkm_job_id.sh\n\n";    
+	print QSUB "\n##Calculate RPKMs\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $rpkm_job_id -hold_jid $hold_line $rundir/jobs/$rpkm_job_id.sh\n\n";    
+    }
+}
+
+if ( $opt{de} eq "yes"){
+    #perform differential expression analysis
+    my ($de_job_id) = ("de_".get_job_id());
+    open DE, ">$rundir/jobs/$de_job_id.sh";
+    print DE "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
+    print DE "uname -n > $rundir/logs/$de_job_id.host\n";
+    print DE "export MODULEPATH=/hpc/local/CentOS6/cog_bioinf/modules:\${MODULEPATH}\n";
+    print DE "module load R_3.1.2\n";
+    deRscript($rundir);
+    print DE "time R --save --no-init-file < $rundir/jobs/de.R\n";
+    print DE "module unload R_3.1.2\n";
+    close DE;
+    my $hold_line = join ',',@hold_ids;
+    if ( $hold_line eq '' ){
+	print QSUB "\n##Perform DE analysis\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $de_job_id $rundir/jobs/$de_job_id.sh\n\n";    
+    } else {
+	print QSUB "\n##Perform DE analysis\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $de_job_id -hold_jid $hold_line $rundir/jobs/$de_job_id.sh\n\n";    
     }
 }
 
 if ( $opt{bamqc} eq "yes"){
     #invoke bamMetrics
     my ($bamQC_job_id) = ("bamQC_".get_job_id());
+    push (@hold_ids, $bamQC_job_id);
     open BQ, ">$rundir/jobs/$bamQC_job_id.sh";
     print BQ "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
     print BQ "uname -n > $rundir/logs/$bamQC_job_id.host\n";
@@ -560,30 +602,47 @@ if ( $opt{bamqc} eq "yes"){
     }
     close BQ;
     if ( $opt{mapping} eq "no" ){
-	print QSUB "qsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $bamQC_job_id $rundir/jobs/$bamQC_job_id.sh\n\n";
+	print QSUB "\n##bamQC\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $bamQC_job_id $rundir/jobs/$bamQC_job_id.sh\n\n";
     }else{
 	my $hold_line = join ',',@hold_mapping_ids;
-	print QSUB "qsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $bamQC_job_id -hold_jid $hold_line $rundir/jobs/$bamQC_job_id.sh\n\n";
+	print QSUB "\n##bamQC\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $bamQC_job_id -hold_jid $hold_line $rundir/jobs/$bamQC_job_id.sh\n\n";
     }
     
     #cleaning
     print CL "if [ -f $rundir/bamMetrics/$runname.bamMetrics.pdf ]; then rm -r $rundir/bamMetrics/tmp; fi\n";
     close CL;
     
-    print QSUB "qsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $clean_job_id -hold_jid $bamQC_job_id $rundir/jobs/$clean_job_id.sh\n\n";
 }
 
 close SETTINGS;
 
-
-
+my $hold_line = join ',',@hold_ids;
+print QSUB "\n##cleaning\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $clean_job_id -hold_jid $hold_line $rundir/jobs/$clean_job_id.sh\n\n";
 close QSUB;
-system "sh $mainJobID";
+
+system "sh $mainJobID" unless $opt{debug};
 
 
 
 ## SUBROUTINES ##
-
+sub checkDesign{
+    my $designfile = shift;
+    my $status = 'good';
+    my @array;
+    open DESIGN, "<", $designfile or die "cannot open designfile\n";
+    while ( my $line = <DESIGN> ){
+	chomp($line);
+	my @elements = split("\t",$line);
+	$status = 'wrong' if $#elements+1 ne 2;
+	push @array, $elements[1];
+    }
+    my @uniques = uniq @array;
+    if ( $#uniques+1 ne 2 ){
+	$status = 'wrong';
+    }
+    
+    return($status);
+}
 sub mergeRscript{
     my $rundir = shift;
     my $runname = basename($rundir);
@@ -594,7 +653,7 @@ nr_cols=0
 sampledir = ''
 for ( dir in dirs ){
     sample=basename(dir)
-    if ( (sample != 'read_counts') && (sample != 'bamMetrics') && (sample != 'logs') && (sample != 'jobs')){
+    if ( (sample != 'read_counts') && (sample != 'bamMetrics') && (sample != 'logs') && (sample != 'jobs') && (sample != 'DEanalysis') ){
 	nr_cols = nr_cols+1
 	sampledir = dir
     }
@@ -607,7 +666,7 @@ samplenames=c('gene')
 
 for ( dir in dirs ) {
     sample=basename(dir)
-    if ( (sample != 'read_counts') && (sample != 'bamMetrics') && (sample != 'jobs') && (sample != 'logs') ) {
+    if ( (sample != 'read_counts') && (sample != 'bamMetrics') && (sample != 'jobs') && (sample != 'logs') && (sample != 'DEanalysis') ) {
 	samplenames <- append(samplenames, as.character(sample))
 	countsfile=paste("$rundir/",sample,'/read_counts/',sample,'_htseq_counts.txt',sep="")
 	counts=read.table(countsfile,sep="\\t",header=F)
@@ -652,10 +711,10 @@ conds <- factor(c(colnames(counts)))
 cds <- newCountDataSet( counts, conds )
 cds <- estimateSizeFactors( cds )
 
-normalized_counts <- round(counts(cds, normalized=TRUE))
+normalized_counts <- counts(cds, normalized=TRUE)
 
 outfile2="$rundir/read_counts/$runname\_readCounts_normalized.txt"
-write.table(normalized_counts, file=outfile2, row.names=T,col.names=NA, quot=F,sep="\\t")
+write.table(normalized_counts, file=outfile2, row.names=T,col.names=NA, quote=F,sep="\\t")
 
 EOS
     close(normRscript);
@@ -689,10 +748,110 @@ colnames(df) <- colnames(raw_read_counts)
 rownames(df) <- rownames(raw_read_counts)
 
 outfile="$rundir/read_counts/$runname\_readCounts_RPKM.txt"
-write.table(df, file=outfile, row.names=T,col.names=NA, quot=F,sep="\t")
+write.table(df, file=outfile, row.names=T,col.names=NA, quote=F,sep="\t")
 
 EOS
     close(rpkmRscript);
+}
+
+sub deRscript{
+    my $rundir = shift;
+    my $runname = basename($rundir);
+    my $annotationdb = $annotationDB{$SPECIES};
+    my $design = $opt{design};
+    open deRscript, ">$rundir/jobs/de.R" or die "cannot open Rscript\n";
+    print deRscript <<EOS;
+library($annotationdb.eg.db)
+library(DESeq2)
+library(ggplot2)
+library(gplots)
+library(RColorBrewer)
+
+outdir="$rundir/DEanalysis/"
+
+# # ----- GENE ANNOTATIONS --------
+# convert SYMBOL map to table
+s = toTable($annotationdb.egSYMBOL) 
+# convert ENSEMBL map to table
+t = toTable($annotationdb.egENSEMBL)
+# merge symbol map table to ensembl map table
+gene_annotations = merge(t, s, by.x = "gene_id", by.y = "gene_id")
+
+
+# ----- IMPORT DATA --------
+raw_read_counts <- read.table("$rundir/read_counts/$runname\_readCounts_raw.txt", sep="\\t",header=T,row.names=1,check.names=F)
+orig.cols <- colnames(raw_read_counts)
+colnames(raw_read_counts) <- make.names(colnames(raw_read_counts))
+design = read.table("$design",row.names=1,header=F)
+colnames(design) <- c('condition')
+#put samples in same order as in raw_read_counts
+conditions <- design[orig.cols,,drop=FALSE]
+
+
+#---------- Standard design ----------
+
+#construct a DESeqDataSet:
+dds <- DESeqDataSetFromMatrix(countData = raw_read_counts, colData = conditions, design = ~ condition)
+
+#Differential expression analysis
+dds <- DESeq(dds)
+dds <- dds[rowSums(counts(dds)) > 1,] #pre-filter low count genes
+res <- results(dds) #access the results
+resOrdered <- res[order(res\$padj),] #order by adjusted pvalue
+
+#create MA plot: shows the log2 fold changes attributable to a given variable over the mean of normalized counts
+#points are colored red if the adjusted p values is less than 0.1
+#points which fall out of the window are plotted as open triangles pointing either up or down
+png(paste(outdir,"$runname\_MAplot.png",sep=""))
+plotMA(res, main="DESeq2", ylim=c(-2,2))
+dev.off()
+
+
+#---------- transformations ----------
+
+# In order to test for differential expression, we operate on raw counts and use discrete distributions.
+# However for other downstream analyses ( e.g.  for visualization or clustering ) it
+# might be useful to work with transformed versions of the count data.
+
+# The function rlog, stands for regularized log, transforming the original count data to the log2 scale
+# by fitting a model with a term for each sample and a prior distribution on the coefficients which is
+# estimated from the data.
+rld <- rlog(dds)
+rldMat <- assay(rld)
+
+hmcol <- colorRampPalette(brewer.pal(9, "GnBu"))(100)
+
+#heatmap of the sample-to-sample distances
+distsRL <- dist(t(assay(rld)))
+mat <- as.matrix(distsRL)
+hc <- hclust(distsRL)
+png(paste(outdir,"$runname\_sampletosample_distances.png",sep=""))
+heatmap.2(mat,Rowv=as.dendrogram(hc), symm=TRUE, trace="none", col=rev(hmcol), margin=c(13,13))
+dev.off()
+
+#principal component plot of the samples
+data <- plotPCA(rld, intgroup=c("condition"), returnData=TRUE)
+percentVar <- round(100 * attr(data, "percentVar"))
+png(paste(outdir,"$runname\_PCAplot.png",sep=""))
+ggplot(data, aes(PC1,PC2,color=condition)) +
+    geom_point(size=3) +
+    xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+    ylab(paste0("PC2: ",percentVar[2],"% variance"))
+dev.off()
+
+
+# add gene symbols to results table
+resOrdered\$id = rownames(resOrdered)
+res1 = as.data.frame(resOrdered)
+res2 = merge(res1, gene_annotations, by.x = "id", by.y = "ensembl_id", all.x=TRUE)
+res4 = res2[order(res2\$pval),]
+res5 = res4[which(!duplicated(res4\$id)),]
+tablename <- paste(outdir,"$runname\_DEanalysis_all.txt",sep="")
+write.table(res5, file=tablename, sep = "\\t", col.names = T, row.names = F, quote = F)
+
+
+EOS
+    close(deRscript);
 }
 
 sub get_job_id {
@@ -701,3 +860,7 @@ sub get_job_id {
    return $id;
 }
 
+sub timestamp{
+    my $t = localtime;
+    return sprintf( "%04d-%02d-%02d_%02d-%02d-%02d",$t->year + 1900, $t->mon + 1, $t->mday, $t->hour, $t->min, $t->sec );
+}
