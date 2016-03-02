@@ -28,7 +28,6 @@ sub usage{
     -h|help                           [s]	Help
     -sp|species                       [s]	Species of RNA-seq data [HUMAN/RAT/MOUSE/ZEBRAFISH/DOG] Default: HUMAN
     -pe|nthreads                      [i]	Number of threads for processes run on execute nodes. [number] Default: 4
-    -g|genome                         [s]	Directory with reference genome [/path/to/genome] Default: /hpc/cog_bioinf/GENOMES
     -fqc|fastqc                       [s]	Perform FastQC? [yes/no] Default: yes
     -m|mapping                        [s]	Perform mapping with STAR? [yes/no] Default: yes
     -stranded                         [s]	Is the RNA-seq data from a strand-specific assay? [yes/no/reversed] Default: reversed
@@ -38,13 +37,12 @@ sub usage{
     -n|normalize                      [s]	Want to normalize counted reads? [yes/no] Default: yes
     -rpkm                             [s]	Want to retrieve RPKMs? [yes/no] Default: yes
     -de                               [s]	Want to perform DE analysis? [yes/no] Default: no
-    -design                           [s]	File with study desing [/path/to/studydesign.txt] (see description below for lay-out)
+    -design                           [s]	File with study desing [/path/to/studydesign.txt] (see description below for required lay-out)
     -bamqc                            [s]	Want to retrieve bam statistics? [yes/no] Default: yes
-    -uniq                             [s]	Want to retreive alignment file (BAM) with unique reads? [yes/no] Default: no
     -chimSegmentMin                   [i]	Minimum length of chimeric segment length. [number] Default: 15
     -chimJunctionOverhangMin          [i]	Minimum overhang for a chimeric junction. [number] Default: 15
     -outSJfilterIntronMaxVsReadN      [s]	Maximum gap allowed for junctions supported by 1,2,3...N reads. [number] Default: 10.000.000
-    -debug                            [s]	Do not submit jobs. [yes/no] Default: no
+    -debug                            [s]	Debug mode [yes/no] Default: no
     
     Lay-out design file:
      sample1	test
@@ -94,11 +92,11 @@ my %opt;
     'refflat_file'			=> undef,
     'genesizes_file'			=> undef,
     'fastqc_path'			=> '/hpc/cog_bioinf/common_scripts/FastQC/fastqc',
-    'star_path'				=> '/hpc/local/CentOS6/cog_bioinf/STAR-STAR_2.4.2a/source/STAR',
+#     'star_path'				=> '/hpc/local/CentOS7/cog_bioinf/STAR-2.5.0c/source/STAR',
+    'star_path'				=> '/hpc/local/CentOS7/cog_bioinf/STAR-STAR_2.4.2a/source/STAR',
     'sambamba_path'			=> '/hpc/cog_bioinf/common_scripts/sambamba_v0.5.4/sambamba_v0.5.4',
     'picard_path'			=> '/hpc/cog_bioinf/common_scripts/picard-tools-1.98',
-    'python_path'			=> '/hpc/local/CentOS6/cog_bioinf/Python-2.7.6/bin/python2.7',
-    'bamstats_path'			=> '/hpc/cog_bioinf/common_scripts/bamMetrics/bamMetrics.pl'
+    'bamstats_path'			=> '/hpc/local/CentOS7/cog_bioinf/bamMetrics/bamMetrics.pl'
 );
 
 die usage() if @ARGV == 0;
@@ -144,7 +142,7 @@ die "[ERROR] Wrong option ($opt{count}) given with -count. Must be \"yes\" or \"
 die "[ERROR] Wrong option ($opt{normalize}) given with -normalize. Must be \"yes\" or \"no\".\n" if ( ($opt{normalize} ne "no") && ($opt{normalize} ne "yes") );
 die "[ERROR] Wrong option ($opt{rpkm}) given with -rpkm. Must be \"yes\" or \"no\".\n" if ( ($opt{rpkm} ne "no") && ($opt{rpkm} ne "yes") );
 die "[ERROR] Wrong option ($opt{uniq}) given with -uniq. Must be \"yes\" or \"no\".\n" if ( ($opt{uniq} ne "no") && ($opt{uniq} ne "yes") );
-die "[ERROR] Wrong option ($opt{id}) given with -id. Must be \"gene_id\", \"transcript_id\" or \"exon_id\".\n" if ( ($opt{id} ne "gene_id") && ($opt{id} ne "transcript_id") && ($opt{id} ne "exon_id") );
+die "[ERROR] Wrong option ($opt{id}) given with -id. Must be \"gene_id\", \"transcript_id\", \"exon_id\" or \"all\".\n" if ( ($opt{id} ne "gene_id") && ($opt{id} ne "transcript_id") && ($opt{id} ne "exon_id") && ($opt{id} ne "all"));
 die "[ERROR] Must give design (-design) with -de option.\n" if ( ($opt{de} eq "yes") && (! $opt{design}) );
 die "[ERROR] Design file doesn't exist!\n" if ( ($opt{de} eq "yes") && (! -e $opt{design}) );
 die "[ERROR] Design file is not in right format. See -h for lay-out.\n" if ( ($opt{de} eq "yes") && (checkDesign($opt{design}) eq "wrong") );
@@ -310,12 +308,12 @@ print SETTINGS "BAMQC=$opt{bamqc}\n";
 
 my $mainJobID = "$rundir/jobs/".get_job_id()."_qsub.sh";
 open QSUB, ">$mainJobID";
-print QSUB "\#!/bin/sh\n\#\$ \-o $rundir/logs\n\#\$ \-e $rundir/logs\n\n";
+print QSUB "\#!/bin/bash\n\#\$ \-o $rundir/logs\n\#\$ \-e $rundir/logs\n\n";
 
 #cleanup script
 my ($clean_job_id) = ("clean_".get_job_id());
 open CL, ">$rundir/jobs/$clean_job_id.sh";
-print CL "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
+print CL "\#!/bin/bash\n\n";
 print CL "uname -n > $rundir/logs/$clean_job_id.host\n";
 
 my @hold_ids=();
@@ -331,7 +329,7 @@ foreach my $sample (keys %{$samples}) {
 	push @hold_mapping_ids, $job_id;
 	#create bash script for STAR submission of this sample
 	open STAR_SH,">$rundir/$sample/jobs/$job_id.sh" or die "Couldn't create $rundir/$sample/jobs/$job_id.sh\n";
-	print STAR_SH "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
+	print STAR_SH "\#!/bin/bash\n\n";
 	print STAR_SH "uname -n > $rundir/$sample/logs/$sample.host\n";
 	print STAR_SH "echo \"mapping pair\t\" `date` >> $rundir/$sample/logs/$sample.host\n";
 	print STAR_SH "mkdir -p $rundir/$sample/mapping/tmp/$job_id/\n";
@@ -399,23 +397,23 @@ foreach my $sample (keys %{$samples}) {
 		
 		
 		open FASTQC,">$rundir/$sample/jobs/$FastQC1_job_id.sh";
-		print FASTQC "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
+		print FASTQC "\#!/bin/bash\n\n";
 		print FASTQC "cd $rundir/$sample/fastqc\n\n";
 		print FASTQC "uname -n > ../logs/$FastQC1_job_id.host\n";
 		print FASTQC "echo \"FastQC\t\" `date` >> ../logs/FastQC_$sample.host\n";
 		print FASTQC "$opt{fastqc_path} $R1 -o $rundir/$sample/fastqc\n";
-		print QSUB "##FastQC\nqsub -q veryshort -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $FastQC1_job_id $rundir/$sample/jobs/$FastQC1_job_id.sh\n";
+		print QSUB "##FastQC\nqsub -l h_rt=02:00:00 -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $FastQC1_job_id $rundir/$sample/jobs/$FastQC1_job_id.sh\n";
 		close FASTQC;
 		
 		
 		if ($paired == 1) {
 		    open FASTQC2,">$rundir/$sample/jobs/$FastQC2_job_id.sh";
-		    print FASTQC2 "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
+		    print FASTQC2 "\#!/bin/bash\n\n";
 		    print FASTQC2 "cd $rundir/$sample/fastqc\n\n";
 		    print FASTQC2 "uname -n > ../logs/$FastQC2_job_id.host\n";
 		    print FASTQC2 "echo \"FastQC\t\" `date` >> ../logs/FastQC2_$sample.host\n";
 		    print FASTQC2 "$opt{fastqc_path} $R2 -o $rundir/$sample/fastqc\n";
-		    print QSUB "##FastQC\nqsub -q veryshort -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $FastQC2_job_id $rundir/$sample/jobs/$FastQC2_job_id.sh\n";
+		    print QSUB "##FastQC\nqsub -l h_rt=02:00:00 -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $FastQC2_job_id $rundir/$sample/jobs/$FastQC2_job_id.sh\n";
 		    close FASTQC2;
 		}
 	    }
@@ -432,14 +430,14 @@ foreach my $sample (keys %{$samples}) {
 	print STAR_SH $star_command;
 
 	#Add read groups using picard
-	print STAR_SH "java -jar $opt{picard_path}\/AddOrReplaceReadGroups.jar INPUT=$rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.sortedByCoord.out.bam OUTPUT=$rundir/$sample/mapping/$sample\_sorted.bam RGID=$ID RGLB=$LB RGPL=$PL RGPU=$PU RGSM=$SM\n";
+	print STAR_SH "java -Xmx8G -Djava.io.tmpdir=\$TMPDIR -jar $opt{picard_path}\/AddOrReplaceReadGroups.jar INPUT=$rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.sortedByCoord.out.bam OUTPUT=$rundir/$sample/mapping/$sample\_sorted.bam RGID=$ID RGLB=$LB RGPL=$PL RGPU=$PU RGSM=$SM\n";
 
 	#sort & index bam
 	print STAR_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sorted.bam\n";
 
 	if ( $opt{uniq} eq 'yes' ){
 	    print STAR_SH "$opt{sambamba_path} view -t $opt{nthreads} -f bam -F \"not secondary_alignment\" $rundir/$sample/mapping/$sample\_sorted.bam > $rundir/$sample/mapping/$sample\_sorted_uniq.bam\n";
-	    print STAR_SH "java -Xmx2g  -jar $opt{picard_path}\/MarkDuplicates.jar INPUT=$rundir/$sample/mapping/$sample\_sorted_uniq.bam OUTPUT=$rundir/$sample/mapping/$sample\_sorted_uniq_markDup.bam METRICS_FILE=$rundir/$sample/mapping/$sample\_sorted_uniq_markDup_metrics.txt\n";
+	    print STAR_SH "java -Xmx8G -Djava.io.tmpdir=\$TMPDIR -jar $opt{picard_path}\/MarkDuplicates.jar INPUT=$rundir/$sample/mapping/$sample\_sorted_uniq.bam OUTPUT=$rundir/$sample/mapping/$sample\_sorted_uniq_markDup.bam METRICS_FILE=$rundir/$sample/mapping/$sample\_sorted_uniq_markDup_metrics.txt\n";
 	    print STAR_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sorted_uniq.bam\n";
 	    print STAR_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sorted_uniq_markDup.bam\n";
 	    print STAR_SH "$opt{sambamba_path} flagstat $rundir/$sample/mapping/$sample\_sorted_uniq_markDup.bam\n";
@@ -456,7 +454,7 @@ foreach my $sample (keys %{$samples}) {
 	print QSUB "\n";
 	
 	if ($opt{mapping} eq "yes") {
-	    print QSUB "##STAR mapping\nqsub -q short -pe threaded $opt{nthreads} -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $job_id $rundir/$sample/jobs/$job_id.sh\n\n";
+	    print QSUB "##STAR mapping\nqsub -l h_rt=08:00:00,h_vmem=100G,tmpspace=100G -pe threaded $opt{nthreads} -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $job_id $rundir/$sample/jobs/$job_id.sh\n\n";
 	}
 	
 	#get read counts of mapped reads
@@ -464,8 +462,9 @@ foreach my $sample (keys %{$samples}) {
 	    my ($HTSeqCount_job_id) = ("htseqCount_".get_job_id());
 	    push (@hold_ids, $HTSeqCount_job_id);
 	    open HT,">$rundir/$sample/jobs/$HTSeqCount_job_id.sh";
-	    print HT "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
+	    print HT "\#!/bin/bash\n\n";
 	    print HT "uname -n > $rundir/$sample/logs/htseqCount_$sample.host\n";
+	    print HT "module load python/2.7.10\n";
 	    
 	    #set correct strandedness for htseq count
 	    my $s_val;
@@ -479,34 +478,48 @@ foreach my $sample (keys %{$samples}) {
 		$s_val = 'no' if $opt{stranded} eq "no";
 	    }
 	    
-	    print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sorted.bam | $opt{python_path} -m HTSeq.scripts.count -m union -r pos -s $s_val -i $opt{id} - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_counts.txt\n";
-
-	    close HT;
-	    if ( $opt{mapping} eq "no" ){
-		print QSUB  "##HTSeq-count\nqsub -q veryshort -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $HTSeqCount_job_id $rundir/$sample/jobs/$HTSeqCount_job_id.sh\n\n";
-	    }else{
-		print QSUB  "##HTSeq-count\nqsub -q veryshort -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $HTSeqCount_job_id -hold_jid $job_id $rundir/$sample/jobs/$HTSeqCount_job_id.sh\n\n";
+	    if ( $opt{id} eq "all" ){
+		print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sorted.bam | python -m HTSeq.scripts.count -m union -r pos -s $s_val -i gene_id - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_gene_counts.txt\n";
+		print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sorted.bam | python -m HTSeq.scripts.count -m union -r pos -s $s_val -i exon_id - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_exon_counts.txt\n";
+		print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sorted.bam | python -m HTSeq.scripts.count -m union -r pos -s $s_val -i transcript_id - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_transcript_counts.txt\n";
+		print HT "module unload python/2.7.10\n";
+		close HT;
+		if ( $opt{mapping} eq "no" ){
+		    print QSUB  "##HTSeq-count\nqsub -l h_rt=08:00:00 -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $HTSeqCount_job_id $rundir/$sample/jobs/$HTSeqCount_job_id.sh\n\n";
+		}else{
+		    print QSUB  "##HTSeq-count\nqsub -l h_rt=08:00:00 -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $HTSeqCount_job_id -hold_jid $job_id $rundir/$sample/jobs/$HTSeqCount_job_id.sh\n\n";
+		}
+	}
+	    else{
+		print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sorted.bam | python -m HTSeq.scripts.count -m union -r pos -s $s_val -i $opt{id} - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_counts.txt\n";
+		print HT "module unload python/2.7.10\n";
+		close HT;
+		if ( $opt{mapping} eq "no" ){
+		    print QSUB  "##HTSeq-count\nqsub -l h_rt=08:00:00 -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $HTSeqCount_job_id $rundir/$sample/jobs/$HTSeqCount_job_id.sh\n\n";
+		}else{
+		    print QSUB  "##HTSeq-count\nqsub -l h_rt=08:00:00 -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $HTSeqCount_job_id -hold_jid $job_id $rundir/$sample/jobs/$HTSeqCount_job_id.sh\n\n";
+		}
 	    }
 	}
 }
 
-if ( $opt{merge} eq "yes" ){
+if ( $opt{count} eq "yes" ){
     #merge count tables of all samples
     my ($mergeTables_job_id) = ("mergeTables_".get_job_id());
     open MT,">$rundir/jobs/$mergeTables_job_id.sh";
-    print MT "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
+    print MT "\#!/bin/bash\n\n";
     print MT "uname -n > $rundir/logs/$mergeTables_job_id.host\n";
     print MT "export MODULEPATH=/hpc/local/CentOS6/cog_bioinf/modules:\${MODULEPATH}\n";
-    print MT "module load R_3.1.2\n";
+    print MT "module load R/3.2.2\n";
     mergeRscript($rundir);
     print MT "time R --save --no-init-file < $rundir/jobs/merge.R\n";
-    print MT "module unload R_3.1.2\n";
+    print MT "module unload R/3.2.2\n";
     close MT;
     my $hold_line = join ',',@hold_ids;
     if ( $hold_line eq '' ){
-	print QSUB "\n##Merge HTSeq-count tables\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $mergeTables_job_id $rundir/jobs/$mergeTables_job_id.sh\n\n";
+	print QSUB "\n##Merge HTSeq-count tables\nqsub -l h_rt=02:00:00 -o $rundir/logs -e $rundir/logs -R yes -N $mergeTables_job_id $rundir/jobs/$mergeTables_job_id.sh\n\n";
     } else {
-	print QSUB "\n##Merge HTSeq-count tables\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $mergeTables_job_id -hold_jid $hold_line $rundir/jobs/$mergeTables_job_id.sh\n\n";
+	print QSUB "\n##Merge HTSeq-count tables\nqsub -l h_rt=02:00:00 -o $rundir/logs -e $rundir/logs -R yes -N $mergeTables_job_id -hold_jid $hold_line $rundir/jobs/$mergeTables_job_id.sh\n\n";
     }
     push (@hold_ids, $mergeTables_job_id);
 }
@@ -515,19 +528,19 @@ if ( $opt{normalize} eq "yes"){
     #normalize the merged count table
     my ($normTables_job_id) = ("normTables_".get_job_id());
     open NM,">$rundir/jobs/$normTables_job_id.sh";
-    print NM "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
+    print NM "\#!/bin/bash\n\n";
     print NM "uname -n > $rundir/logs/$normTables_job_id.host\n";
     print NM "export MODULEPATH=/hpc/local/CentOS6/cog_bioinf/modules:\${MODULEPATH}\n";
-    print NM "module load R_3.1.2\n";
+    print NM "module load R/3.2.2\n";
     normalizeRscript($rundir);
     print NM "time R --save --no-init-file < $rundir/jobs/normalize.R\n";
-    print NM "module unload R_3.1.2\n";
+    print NM "module unload R/3.2.2\n";
     close NM;
     my $hold_line = join ',',@hold_ids;
     if ( $hold_line eq '' ){
-	print QSUB "\n##Normalize counts table\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $normTables_job_id $rundir/jobs/$normTables_job_id.sh\n\n";
+	print QSUB "\n##Normalize counts table\nqsub -l h_rt=02:00:00 -o $rundir/logs -e $rundir/logs -R yes -N $normTables_job_id $rundir/jobs/$normTables_job_id.sh\n\n";
     } else {
-	print QSUB "\n##Normalize counts table\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $normTables_job_id -hold_jid $hold_line $rundir/jobs/$normTables_job_id.sh\n\n";
+	print QSUB "\n##Normalize counts table\nqsub -l h_rt=02:00:00 -o $rundir/logs -e $rundir/logs -R yes -N $normTables_job_id -hold_jid $hold_line $rundir/jobs/$normTables_job_id.sh\n\n";
     }
 }
 
@@ -535,19 +548,19 @@ if( $opt{rpkm} eq "yes"){
     #calculate rpkm's from merged count table
     my ($rpkm_job_id) = ("rpkm_".get_job_id());
     open RP, ">$rundir/jobs/$rpkm_job_id.sh";
-    print RP "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
+    print RP "\#!/bin/bash\n\n";
     print RP "uname -n > $rundir/logs/$rpkm_job_id.host\n";
     print RP "export MODULEPATH=/hpc/local/CentOS6/cog_bioinf/modules:\${MODULEPATH}\n";
-    print RP "module load R_3.1.2\n";
+    print RP "module load R/3.2.2\n";
     rpkmRscript($rundir);
     print RP "time R --save --no-init-file --args $rundir < $rundir/jobs/rpkm.R\n";
-    print RP "module unload R_3.1.2\n";
+    print RP "module unload R/3.2.2\n";
     close RP;
     my $hold_line = join ',',@hold_ids;
     if ( $hold_line eq '' ){
-	print QSUB "\n##Calculate RPKMs\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $rpkm_job_id $rundir/jobs/$rpkm_job_id.sh\n\n";    
+	print QSUB "\n##Calculate RPKMs\nqsub -l h_rt=02:00:00 -o $rundir/logs -e $rundir/logs -R yes -N $rpkm_job_id $rundir/jobs/$rpkm_job_id.sh\n\n";    
     } else {
-	print QSUB "\n##Calculate RPKMs\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $rpkm_job_id -hold_jid $hold_line $rundir/jobs/$rpkm_job_id.sh\n\n";    
+	print QSUB "\n##Calculate RPKMs\nqsub -l h_rt=02:00:00 -o $rundir/logs -e $rundir/logs -R yes -N $rpkm_job_id -hold_jid $hold_line $rundir/jobs/$rpkm_job_id.sh\n\n";    
     }
 }
 
@@ -555,19 +568,19 @@ if ( $opt{de} eq "yes"){
     #perform differential expression analysis
     my ($de_job_id) = ("de_".get_job_id());
     open DE, ">$rundir/jobs/$de_job_id.sh";
-    print DE "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
+    print DE "\#!/bin/bash\n\n";
     print DE "uname -n > $rundir/logs/$de_job_id.host\n";
     print DE "export MODULEPATH=/hpc/local/CentOS6/cog_bioinf/modules:\${MODULEPATH}\n";
-    print DE "module load R_3.1.2\n";
+    print DE "module load R/3.2.2\n";
     deRscript($rundir);
     print DE "time R --save --no-init-file < $rundir/jobs/de.R\n";
-    print DE "module unload R_3.1.2\n";
+    print DE "module unload R/3.2.2\n";
     close DE;
     my $hold_line = join ',',@hold_ids;
     if ( $hold_line eq '' ){
-	print QSUB "\n##Perform DE analysis\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $de_job_id $rundir/jobs/$de_job_id.sh\n\n";    
+	print QSUB "\n##Perform DE analysis\nqsub -l h_rt=02:00:00 -o $rundir/logs -e $rundir/logs -R yes -N $de_job_id $rundir/jobs/$de_job_id.sh\n\n";    
     } else {
-	print QSUB "\n##Perform DE analysis\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $de_job_id -hold_jid $hold_line $rundir/jobs/$de_job_id.sh\n\n";    
+	print QSUB "\n##Perform DE analysis\nqsub -l h_rt=02:00:00 -o $rundir/logs -e $rundir/logs -R yes -N $de_job_id -hold_jid $hold_line $rundir/jobs/$de_job_id.sh\n\n";    
     }
 }
 
@@ -576,7 +589,7 @@ if ( $opt{bamqc} eq "yes"){
     my ($bamQC_job_id) = ("bamQC_".get_job_id());
     push (@hold_ids, $bamQC_job_id);
     open BQ, ">$rundir/jobs/$bamQC_job_id.sh";
-    print BQ "\#!/bin/sh\n\#\$ -S /bin/sh\n\n";
+    print BQ "\#!/bin/bash\n\n";
     print BQ "uname -n > $rundir/logs/$bamQC_job_id.host\n";
 
     my $picard_strand;
@@ -595,17 +608,17 @@ if ( $opt{bamqc} eq "yes"){
     print BQ "bar=\$(printf \",%s\" \"\${filearray[\@]}\")\n\n";
     print BQ "bamline=`echo \$bar | sed 's/,/ -bam /g'`\n\n";
     if ( $paired==0 ){
-	print BQ "perl $opt{bamstats_path} \${bamline} -debug -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -single_end -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
+	print BQ "perl $opt{bamstats_path} \${bamline} -queue_threads 2 -debug -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -single_end -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
     }
     elsif ( $paired==1 ){
-	print BQ "perl $opt{bamstats_path} \${bamline} -debug -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
+	print BQ "perl $opt{bamstats_path} \${bamline} -queue_threads 2 -debug -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
     }
     close BQ;
     if ( $opt{mapping} eq "no" ){
-	print QSUB "\n##bamQC\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $bamQC_job_id $rundir/jobs/$bamQC_job_id.sh\n\n";
+	print QSUB "\n##bamQC\nqsub -l h_rt=02:00:00 -o $rundir/logs -e $rundir/logs -R yes -N $bamQC_job_id $rundir/jobs/$bamQC_job_id.sh\n\n";
     }else{
 	my $hold_line = join ',',@hold_mapping_ids;
-	print QSUB "\n##bamQC\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $bamQC_job_id -hold_jid $hold_line $rundir/jobs/$bamQC_job_id.sh\n\n";
+	print QSUB "\n##bamQC\nqsub -l h_rt=02:00:00 -o $rundir/logs -e $rundir/logs -R yes -N $bamQC_job_id -hold_jid $hold_line $rundir/jobs/$bamQC_job_id.sh\n\n";
     }
     
     #cleaning
@@ -617,7 +630,7 @@ if ( $opt{bamqc} eq "yes"){
 close SETTINGS;
 
 my $hold_line = join ',',@hold_ids;
-print QSUB "\n##cleaning\nqsub -q veryshort -o $rundir/logs -e $rundir/logs -R yes -N $clean_job_id -hold_jid $hold_line $rundir/jobs/$clean_job_id.sh\n\n";
+print QSUB "\n##cleaning\nqsub -l h_rt=02:00:00 -o $rundir/logs -e $rundir/logs -R yes -N $clean_job_id -hold_jid $hold_line $rundir/jobs/$clean_job_id.sh\n\n";
 close QSUB;
 
 system "sh $mainJobID" unless $opt{debug};
