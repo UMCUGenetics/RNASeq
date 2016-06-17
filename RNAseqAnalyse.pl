@@ -37,12 +37,13 @@ sub usage{
     -n|normalize                      [s]	Want to normalize counted reads? [yes/no] Default: yes
     -rpkm                             [s]	Want to retrieve RPKMs? [yes/no] Default: yes
     -de                               [s]	Want to perform DE analysis? [yes/no] Default: no
-    -design                           [s]	File with study desing [/path/to/studydesign.txt] (see description below for required lay-out)
+    -design                           [s]	File with study design [/path/to/studydesign.txt] (see description below for required lay-out)
+    -vc|variantcalling                [s]	Want to call variants? [yes/no] Default: no
     -bamqc                            [s]	Want to retrieve bam statistics? [yes/no] Default: yes
     -chimSegmentMin                   [i]	Minimum length of chimeric segment length. [number] Default: 15
     -chimJunctionOverhangMin          [i]	Minimum overhang for a chimeric junction. [number] Default: 15
     -outSJfilterIntronMaxVsReadN      [s]	Maximum gap allowed for junctions supported by 1,2,3...N reads. [number] Default: 10.000.000
-    -debug                            [s]	Debug mode [yes/no] Default: no
+    -debug                            [s]	Debug mode
     
     Lay-out design file:
      sample1	test
@@ -67,6 +68,7 @@ my %opt;
     'debug'				=> undef,
     'input'				=> undef,
     'outputDir'				=> undef,
+#     'mail'				=> undef,
     'nthreads'				=> 4,
     'fastqc'				=> "yes",
     'mapping'				=> "yes",
@@ -79,6 +81,7 @@ my %opt;
     'bamqc'				=> "yes",
     'de'				=> "no",
     'design'				=> undef,
+    'variantcalling'			=> "no",
     'id'				=> "gene_id",
     'uniq'				=> "no",
     'chimSegmentMin'			=> 15,
@@ -91,12 +94,19 @@ my %opt;
     'gtf_file'				=> undef,
     'refflat_file'			=> undef,
     'genesizes_file'			=> undef,
-    'fastqc_path'			=> '/hpc/cog_bioinf/common_scripts/FastQC/fastqc',
+    'ini_file'				=> undef,
+    'fastqc_path'			=> '/hpc/local/CentOS7/cog_bioinf/FastQ-v0.11.4/fastqc',
 #     'star_path'				=> '/hpc/local/CentOS7/cog_bioinf/STAR-2.5.0c/source/STAR',
     'star_path'				=> '/hpc/local/CentOS7/cog_bioinf/STAR-STAR_2.4.2a/source/STAR',
-    'sambamba_path'			=> '/hpc/cog_bioinf/common_scripts/sambamba_v0.5.4/sambamba_v0.5.4',
-    'picard_path'			=> '/hpc/cog_bioinf/common_scripts/picard-tools-1.98',
-    'bamstats_path'			=> '/hpc/local/CentOS7/cog_bioinf/bamMetrics/bamMetrics.pl'
+    'sambamba_path'			=> '/hpc/local/CentOS7/cog_bioinf/sambamba_v0.5.8/sambamba',
+    'picard_path'			=> '/hpc/local/CentOS7/cog_bioinf/picard-tools-1.141/picard.jar',
+    'gatk_path'				=> '/hpc/local/CentOS7/cog_bioinf/GenomeAnalysisTK-3.4-46',
+    'bamstats_path'			=> '/hpc/local/CentOS7/cog_bioinf/bamMetrics/bamMetrics.pl',
+    'snpEff_path'			=> '/hpc/local/CentOS7/cog_bioinf/snpEff_v4.1h',
+    'igvtools_path'			=> '/hpc/local/CentOS7/cog_bioinf/igvtools-2.3.60/igvtools',
+    'IAP_path'				=> '/hpc/local/CentOS7/cog_bioinf/IAP_DEV',
+    'dbnsfp_path'			=> '/hpc/cog_bioinf/common_dbs/dbNSFP/dbNSFPv2.9/dbNSFP2.9.txt.gz',
+    'gonl_path'				=> '/hpc/cog_bioinf/common_dbs/GoNL/gonl_release5/site_freqs/gonl.snps_indels.r5.sorted.vcf.gz'
 );
 
 die usage() if @ARGV == 0;
@@ -105,6 +115,7 @@ GetOptions (
     'debug'				=> \$opt{debug},
     'i|input=s@'			=> \$opt{input},
     'o|outputDir=s'			=> \$opt{outputDir},
+#     'mail=s'				=> \$opt{mail},
     'pe|nthreads=i'			=> \$opt{nthreads},
     'g|genome=s'			=> \$opt{genome},
     'fa|fasta=s'			=> \$opt{fasta},
@@ -118,6 +129,7 @@ GetOptions (
     'rpkm=s'				=> \$opt{rpkm},
     'de=s'				=> \$opt{de},
     'design=s'				=> \$opt{design},
+    'vc|variantcalling=s'		=> \$opt{variantcalling},
     'bamqc=s'				=> \$opt{bamqc},
     'id=s'				=> \$opt{id},
     'uniq=s'				=> \$opt{uniq},
@@ -132,7 +144,7 @@ die usage() if $opt{help};
 die "[ERROR] Number of threads must be at least 3!\n" if ($opt{nthreads} < 3);
 die usage() unless ( $opt{input} );
 die usage() unless ( $opt{outputDir} );
-die "[ERROR] Nothing to do!\n" if ( ($opt{fastqc} eq "no") && ($opt{mapping} eq "no") && ($opt{count} eq "no") && ($opt{normalize} eq "no") && ($opt{rpkm} eq "no") && ($opt{bamqc} eq "no") && ($opt{de} eq "no") );
+die "[ERROR] Nothing to do!\n" if ( ($opt{fastqc} eq "no") && ($opt{mapping} eq "no") && ($opt{count} eq "no") && ($opt{normalize} eq "no") && ($opt{rpkm} eq "no") && ($opt{bamqc} eq "no") && ($opt{de} eq "no") && ($opt{vc} eq "no") );
 die "[ERROR] Wrong option ($opt{fastqc}) given with -fastqc. Must be \"yes\" or \"no\".\n" if ( ($opt{fastqc} ne "no") && ($opt{fastqc} ne "yes") );
 die "[ERROR] Wrong option ($opt{mapping}) given with -mapping. Must be \"yes\" or \"no\".\n" if ( ($opt{mapping} ne "no") && ($opt{mapping} ne "yes") );
 die "[ERROR] Wrong option ($opt{stranded}) given with -stranded. Must be \"yes\", \"no\" or \"reversed\".\n" if ( ($opt{stranded} ne "no") && ($opt{stranded} ne "yes") && ($opt{stranded} ne "reversed") );
@@ -149,6 +161,7 @@ die "[ERROR] Design file is not in right format. See -h for lay-out.\n" if ( ($o
 
 my $SPECIES = uc $opt{species};
 my %annotationDB = ( 'HUMAN' => 'org.Hs', 'RAT' => 'org.Rn', 'MOUSE' => 'org.Mm', 'ZEBRAFISH' => 'org.Dr', 'DOG' => 'org.Cf' );
+my @knownSites = qw(/hpc/cog_bioinf/common_scripts/GATK_v2.7/bundle/1000G_phase1.indels.b37.vcf /hpc/cog_bioinf/common_scripts/GATK_v2.7/bundle/dbsnp_137.b37.vcf /hpc/cog_bioinf/common_scripts/GATK_v2.7/bundle/Mills_and_1000G_gold_standard.indels.b37.vcf);
 
 if ($SPECIES eq "HUMAN"){
     $opt{genome} .= '/Homo_sapiens.GRCh37';
@@ -157,6 +170,8 @@ if ($SPECIES eq "HUMAN"){
     $opt{refflat_file} = $opt{genome}.'/hg19.refFlat.gz';
     $opt{intervallist} = $opt{genome}.'/Homo_sapiens.GRCh37.GATK.illumina.rRNA.intervallist';
     $opt{genesizes_file} = $opt{genome}.'/Homo_sapiens.GRCh37.74_exon_gene_sizes.txt';
+    $opt{ini_file} = '/hpc/cog_bioinf/data/annelies/RNA_Seq/analysis/HUMAN/HUMAN.ini';
+    $opt{annotate_db} = 'GRCh37.74';
 } elsif ($SPECIES eq "RAT"){
     $opt{genome} .= '/Rattus_norvegicus.Rnor50';
     $opt{fasta} = $opt{genome}.'/Rn_Rn05_ill_gatk_sorted.fa';
@@ -164,6 +179,8 @@ if ($SPECIES eq "HUMAN"){
     $opt{refflat_file} = $opt{genome}.'/rnor50.refFlat.gz';
     $opt{intervallist} = $opt{genome}.'/rno5_rRNA_intervallist.txt';
     $opt{genesizes_file} = $opt{genome}.'/Rattus_norvegicus.Rnor_5.0.71_exon_gene_sizes.txt';
+    $opt{ini_file} = '/hpc/cog_bioinf/data/annelies/RNA_Seq/analysis/RAT/RAT.ini';
+    $opt{annotate_db} = 'Rnor_5.0.71';
 } elsif ($SPECIES eq "MOUSE"){
     $opt{genome} .= '/Mus_musculus.GRCm38';
     $opt{fasta} = $opt{genome}.'/Mm_GRCm38_gatk_sorted.fa';
@@ -171,6 +188,8 @@ if ($SPECIES eq "HUMAN"){
     $opt{refflat_file} = $opt{genome}.'/Mus_musculus_GRCm38.refFlat.gz';
     $opt{intervallist} = $opt{genome}.'/Mus_musculus_GRCm38.rRNA.intervallist';
     $opt{genesizes_file} = $opt{genome}.'/Mus_musculus.GRCm38.70_exon_gene_sizes.txt';
+    $opt{ini_file} = '/hpc/cog_bioinf/data/annelies/RNA_Seq/analysis/MOUSE/MOUSE.ini';
+    $opt{annotate_db} = 'GRCm38.71';
 } elsif ($SPECIES eq "ZEBRAFISH"){
     $opt{genome} .= '/Danio_rerio.Zv9';
     $opt{fasta} = $opt{genome}.'/Zv9_66.fa';
@@ -178,6 +197,8 @@ if ($SPECIES eq "HUMAN"){
     $opt{refflat_file} = $opt{genome}.'/zfish9.refFlat.gz';
     $opt{intervallist} = $opt{genome}.'/Danio_rerio.Zv9.75.rRNA.intervallist';
     $opt{genesizes_file} = $opt{genome}.'/Danio_rerio.Zv9.75_exon_gene_sizes.txt';
+    $opt{ini_file} = '/hpc/cog_bioinf/data/annelies/RNA_Seq/analysis/ZEBRAFISH/ZEBRAFISH.ini';
+    $opt{annotate_db} = 'Zv9.75';
 } elsif ($SPECIES eq "DOG"){
     $opt{genome} .= '/Canis_familiaris.CanFam31';
     $opt{fasta} = $opt{genome}.'/Cf3_ens71_GATK.fa';
@@ -185,6 +206,8 @@ if ($SPECIES eq "HUMAN"){
     $opt{refflat_file} = $opt{genome}.'/CanFam3.1.refFlat.gz';
     $opt{intervallist} = $opt{genome}.'/CanFam3.1_rRNA_genes.intervallist';
     $opt{genesizes_file} = $opt{genome}.'/Canis_familiaris.CanFam3.1.75_exon_gene_sizes.txt';
+    $opt{ini_file} = '/hpc/cog_bioinf/data/annelies/RNA_Seq/analysis/DOG/DOG.ini';
+    $opt{annotate_db} = 'CanFam3.1.71';
 } else {
     die "[ERROR] Wrong species ($SPECIES). Only HUMAN, RAT, MOUSE, DOG or ZEBRAFISH genomes are allowed.\n";
 }
@@ -223,6 +246,7 @@ if (scalar @samplefiles ==0) {
 
 my $rundir = "";
 my $samples = {};
+my @final_bams;
 
 foreach my $f (@samplefiles){
         
@@ -258,6 +282,9 @@ foreach my $f (@samplefiles){
     if(! -e "$rundir/$sample/read_counts" && $opt{count} ne 'no'){
 	mkdir("$rundir/$sample/read_counts") or die "Couldn't create readcounts directory: $rundir/$sample/read_counts\n";
     }
+#     if(! -e "$rundir/variantCalling" && $opt{variantcalling} ne 'no'){
+# 	mkdir("$rundir/variantCalling") or die "Couldn't create variants directory: $rundir/variantCalling\n";
+#     }
     if(! -e "$rundir/$sample/jobs"){
         mkdir("$rundir/$sample/jobs") or die "Couldn't create jobs directory: $rundir/$sample/jobs\n";
     }
@@ -299,6 +326,7 @@ print SETTINGS "COUNTING=$opt{count}\n";
 print SETTINGS "RPKM=$opt{rpkm}\n";
 print SETTINGS "DE=$opt{de}\n";
 print SETTINGS "BAMQC=$opt{bamqc}\n";
+print SETTINGS "VARIANTCALLING=$opt{variantcalling}\n";
 
 
 
@@ -325,15 +353,15 @@ foreach my $sample (keys %{$samples}) {
 	print "\nFiles for sample $sample:\n";
 	print SETTINGS "\nFiles for sample $sample:\n";
 	print QSUB "\n\n###Submissions for sample $sample:\n";
-	my $job_id = "STAR_$sample\_".get_job_id();
+	my $job_id = "MAPPING_$sample\_".get_job_id();
 	push @hold_mapping_ids, $job_id;
 	#create bash script for STAR submission of this sample
-	open STAR_SH,">$rundir/$sample/jobs/$job_id.sh" or die "Couldn't create $rundir/$sample/jobs/$job_id.sh\n";
-	print STAR_SH "\#!/bin/bash\n\n";
-	print STAR_SH "uname -n > $rundir/$sample/logs/$sample.host\n";
-	print STAR_SH "echo \"mapping pair\t\" `date` >> $rundir/$sample/logs/$sample.host\n";
-	print STAR_SH "mkdir -p $rundir/$sample/mapping/tmp/$job_id/\n";
-	print STAR_SH "cd $rundir/$sample/mapping/tmp/$job_id/\n\n";
+	open MAPPING_SH,">$rundir/$sample/jobs/$job_id.sh" or die "Couldn't create $rundir/$sample/jobs/$job_id.sh\n";
+	print MAPPING_SH "\#!/bin/bash\n\n";
+	print MAPPING_SH "uname -n > $rundir/$sample/logs/$sample.host\n";
+	print MAPPING_SH "echo \"mapping pair\t\" `date` >> $rundir/$sample/logs/$sample.host\n";
+	print MAPPING_SH "mkdir -p $rundir/$sample/mapping/tmp/$job_id/\n";
+	print MAPPING_SH "cd $rundir/$sample/mapping/tmp/$job_id/\n\n";
 	#Create STAR command
 	my $star_command = "$opt{star_path} --genomeDir $opt{genome} --runThreadN $opt{nthreads} --outFileNamePrefix $sample\_ --outReadsUnmapped Fastx --outSAMtype BAM SortedByCoordinate --readFilesCommand zcat";
 	if ($opt{stranded} eq "no"){
@@ -350,6 +378,9 @@ foreach my $sample (keys %{$samples}) {
 	}
 	elsif ($opt{fusionSearch} eq "no"){
 	    $star_command .= " --chimSegmentMin 0";
+	}
+	if ($opt{variantcalling} eq "yes"){
+	    $star_command .= " --twopassMode Basic";
 	}
 	
 	my ($ID,$PU,$LB,$SM,$PL)='';
@@ -418,7 +449,7 @@ foreach my $sample (keys %{$samples}) {
 		}
 	    }
 	}
-		
+	
 	chop $R1_fastqs;
 	chop $R2_fastqs;
 	chop $rest_fastqs;
@@ -427,34 +458,61 @@ foreach my $sample (keys %{$samples}) {
 	$star_command .= " --readFilesIn $R2_fastqs $R1_fastqs $rest_fastqs 1>>$rundir/$sample/logs/$sample\_star.log 2>>$rundir/$sample/logs/$sample\_star.err \n\n" if ( $opt{stranded} eq "reversed" );
 	
 	#Print STAR command to star submission script
-	print STAR_SH $star_command;
-
-	#Add read groups using picard
-	print STAR_SH "java -Xmx8G -Djava.io.tmpdir=\$TMPDIR -jar $opt{picard_path}\/AddOrReplaceReadGroups.jar INPUT=$rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.sortedByCoord.out.bam OUTPUT=$rundir/$sample/mapping/$sample\_sorted.bam RGID=$ID RGLB=$LB RGPL=$PL RGPU=$PU RGSM=$SM\n";
-
-	#sort & index bam
-	print STAR_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sorted.bam\n";
-
-	if ( $opt{uniq} eq 'yes' ){
-	    print STAR_SH "$opt{sambamba_path} view -t $opt{nthreads} -f bam -F \"not secondary_alignment\" $rundir/$sample/mapping/$sample\_sorted.bam > $rundir/$sample/mapping/$sample\_sorted_uniq.bam\n";
-	    print STAR_SH "java -Xmx8G -Djava.io.tmpdir=\$TMPDIR -jar $opt{picard_path}\/MarkDuplicates.jar INPUT=$rundir/$sample/mapping/$sample\_sorted_uniq.bam OUTPUT=$rundir/$sample/mapping/$sample\_sorted_uniq_markDup.bam METRICS_FILE=$rundir/$sample/mapping/$sample\_sorted_uniq_markDup_metrics.txt\n";
-	    print STAR_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sorted_uniq.bam\n";
-	    print STAR_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sorted_uniq_markDup.bam\n";
-	    print STAR_SH "$opt{sambamba_path} flagstat $rundir/$sample/mapping/$sample\_sorted_uniq_markDup.bam\n";
+	print MAPPING_SH $star_command;
+	
+	#add read groups
+	print MAPPING_SH "java -Xmx32G -Djava.io.tmpdir=\$TMPDIR -jar $opt{picard_path} AddOrReplaceReadGroups INPUT=$rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.sortedByCoord.out.bam OUTPUT=$rundir/$sample/mapping/$sample\_sort.bam RGID=$ID RGLB=$LB RGPL=$PL RGPU=$PU RGSM=$SM\n";
+	print MAPPING_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sort.bam\n";
+	my $finalbam = "$rundir/$sample/mapping/$sample\_sort.bam";
+	
+	if ( $opt{variantcalling} eq 'yes'){
+	    #mark duplicates
+	    print MAPPING_SH "\n###Mark Duplicates\n";
+	    print MAPPING_SH "java -Xmx32G -Djava.io.tmpdir=\$TMPDIR -jar $opt{picard_path} MarkDuplicates INPUT=$rundir/$sample/mapping/$sample\_sort.bam OUTPUT=$rundir/$sample/mapping/$sample\_sort_dedup.bam CREATE_INDEX=true VALIDATION_STRINGENCY=SILENT M=$rundir/$sample/mapping/$sample\_markDup_metrics.txt\n";
+	    print MAPPING_SH "$opt{sambamba_path} flagstat -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sort_dedup.bam > $rundir/$sample/mapping/$sample\_sort_dedup.flagstat\n";
+	    print MAPPING_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sort_dedup.bam\n";
+	    #splitNCigarReads
+	    print MAPPING_SH "\n###SplitNTrim\n";
+	    print MAPPING_SH "java -Xmx32G -Djava.io.tmpdir=\$TMPDIR -jar $opt{gatk_path}\/GenomeAnalysisTK.jar -T SplitNCigarReads -R $opt{fasta} -I $rundir/$sample/mapping/$sample\_sort_dedup.bam -o $rundir/$sample/mapping/$sample\_sort_dedup_splitN.bam -rf ReassignOneMappingQuality -RMQF 255 -RMQT 60 -U ALLOW_N_CIGAR_READS\n";
+	    print MAPPING_SH "$opt{sambamba_path} flagstat -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sort_dedup_splitN.bam > $rundir/$sample/mapping/$sample\_sort_dedup_splitN.flagstat\n";
+	    print MAPPING_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sort_dedup_splitN.bam\n";
+	    #realigner target creator
+	    print MAPPING_SH "\n###Indel Realignment\n";
+	    print MAPPING_SH "java -Xmx32G -Djava.io.tmpdir=\$TMPDIR -jar $opt{gatk_path}\/GenomeAnalysisTK.jar -T RealignerTargetCreator -R $opt{fasta} -I $rundir/$sample/mapping/$sample\_sort_dedup_splitN.bam -o $rundir/$sample/mapping/$sample\_target.intervals\n";
+	    #indel realignment
+	    print MAPPING_SH "java -Xmx32G -Djava.io.tmpdir=\$TMPDIR -jar $opt{gatk_path}\/GenomeAnalysisTK.jar -T IndelRealigner -R $opt{fasta} -I $rundir/$sample/mapping/$sample\_sort_dedup_splitN.bam -targetIntervals $rundir/$sample/mapping/$sample\_target.intervals -o $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned.bam\n";
+	    print MAPPING_SH "$opt{sambamba_path} flagstat -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned.bam > $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned.flagstat\n";
+	    print MAPPING_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned.bam\n";
+	    $finalbam = "$rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned.bam";
+	    #baserecalibrator
+	    if ( $SPECIES eq 'HUMAN' ){
+		print MAPPING_SH "\n###Base Recalibration\n";
+		print MAPPING_SH "java -Xmx32G -Djava.io.tmpdir=\$TMPDIR -jar $opt{gatk_path}\/GenomeAnalysisTK.jar -T BaseRecalibrator -R $opt{fasta} -I $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned.bam -knownSites " . join(" -knownSites ", @knownSites) . " -o $rundir/$sample/mapping/$sample\_recal_data.table\n";
+		print MAPPING_SH "java -Xmx32G -Djava.io.tmpdir=\$TMPDIR -jar $opt{gatk_path}\/GenomeAnalysisTK.jar -T BaseRecalibrator -R $opt{fasta} -I $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned.bam -knownSites " . join(" -knownSites ", @knownSites) . " -BQSR $rundir/$sample/mapping/$sample\_recal_data.table -o $rundir/$sample/mapping/$sample\_post_recal_data.table\n";
+		print MAPPING_SH "java -Xmx32G -Djava.io.tmpdir=\$TMPDIR -jar $opt{gatk_path}\/GenomeAnalysisTK.jar -T AnalyzeCovariates -R $opt{fasta} -before $rundir/$sample/mapping/$sample\_recal_data.table -after $rundir/$sample/mapping/$sample\_post_recal_data.table -plots $rundir/$sample/mapping/$sample\_recalibration_plots.pdf\n";
+		print MAPPING_SH "java -Xmx32G -Djava.io.tmpdir=\$TMPDIR -jar $opt{gatk_path}\/GenomeAnalysisTK.jar -T PrintReads -R $opt{fasta} -I $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned.bam -BQSR $rundir/$sample/mapping/$sample\_recal_data.table -o $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned_recal.bam\n";
+		print MAPPING_SH "$opt{sambamba_path} flagstat -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned_recal.bam > $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned_recal.flagstat\n";
+		print MAPPING_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned_recal.bam\n";
+		$finalbam = "$rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned_recal.bam";
+	    }
 	}
+	push @final_bams, $finalbam;
+	
+	#index final bam
+	#print MAPPING_SH "$opt{sambamba_path} index -t $opt{nthreads} $finalbam\n";
 
 	#remove and move files
-	print CL "rm $rundir/$sample/mapping/$sample\_Aligned.sortedByCoord.out.bam\n";
-	print STAR_SH "mv $rundir/$sample/mapping/tmp/$job_id/* $rundir/$sample/mapping/\n";
+	print CL "rm $rundir/$sample/mapping/$sample\_*Aligned.sortedByCoord.out.bam\n";
+	print MAPPING_SH "mv $rundir/$sample/mapping/tmp/$job_id/* $rundir/$sample/mapping/\n";
 	print CL "rm -r $rundir/$sample/mapping/tmp\n";
 	print CL "rm -r $rundir/$sample/mapping/$sample\__STARtmp\n";
 	
-	close STAR_SH;
+	close MAPPING_SH;
 	
 	print QSUB "\n";
 	
 	if ($opt{mapping} eq "yes") {
-	    print QSUB "##STAR mapping\nqsub -l h_rt=08:00:00,h_vmem=100G,tmpspace=100G -pe threaded $opt{nthreads} -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $job_id $rundir/$sample/jobs/$job_id.sh\n\n";
+	    print QSUB "##MAPPING\nqsub -l h_rt=08:00:00,h_vmem=100G,tmpspace=100G -pe threaded $opt{nthreads} -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $job_id $rundir/$sample/jobs/$job_id.sh\n\n";
 	}
 	
 	#get read counts of mapped reads
@@ -479,9 +537,9 @@ foreach my $sample (keys %{$samples}) {
 	    }
 	    
 	    if ( $opt{id} eq "all" ){
-		print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sorted.bam | python -m HTSeq.scripts.count -m union -r pos -s $s_val -i gene_id - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_gene_counts.txt\n";
-		print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sorted.bam | python -m HTSeq.scripts.count -m union -r pos -s $s_val -i exon_id - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_exon_counts.txt\n";
-		print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sorted.bam | python -m HTSeq.scripts.count -m union -r pos -s $s_val -i transcript_id - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_transcript_counts.txt\n";
+		print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sort.bam | python -m HTSeq.scripts.count -m union -r pos -s $s_val -i gene_id - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_gene_counts.txt\n";
+		print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sort.bam | python -m HTSeq.scripts.count -m union -r pos -s $s_val -i exon_id - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_exon_counts.txt\n";
+		print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sort.bam | python -m HTSeq.scripts.count -m union -r pos -s $s_val -i transcript_id - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_transcript_counts.txt\n";
 		print HT "module unload python/2.7.10\n";
 		close HT;
 		if ( $opt{mapping} eq "no" ){
@@ -491,7 +549,7 @@ foreach my $sample (keys %{$samples}) {
 		}
 	}
 	    else{
-		print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sorted.bam | python -m HTSeq.scripts.count -m union -r pos -s $s_val -i $opt{id} - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_counts.txt\n";
+		print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sort.bam | python -m HTSeq.scripts.count -m union -r pos -s $s_val -i $opt{id} - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_counts.txt\n";
 		print HT "module unload python/2.7.10\n";
 		close HT;
 		if ( $opt{mapping} eq "no" ){
@@ -503,13 +561,64 @@ foreach my $sample (keys %{$samples}) {
 	}
 }
 
+# if ( $opt{variantcalling} eq "yes" ){
+#     my ($variantcalling_job_id) = ("variantCalling_".get_job_id());
+#     open VC, ">$rundir/jobs/$variantcalling_job_id.sh";
+#     print VC "\#!/bin/bash\n\n";
+#     print VC "uname -n > $rundir/logs/$variantcalling_job_id.host\n";
+#     print VC "mkdir $rundir/variantCalling/bams\n";
+#     print VC "for i in $rundir/*/mapping/*_splitN.bam*; do file=`basename \$i`; ln -s \$i $rundir/variantCalling/bams/\$file; done\n";
+#     print VC "perl $opt{IAP_path}/illumina_createConfig.pl -ip $opt{ini_file} -o $rundir/variantCalling -b $rundir/variantCalling/bams -m $opt{mail} -run\n";
+#     close VC;
+#     my $hold_line = join ',',@hold_mapping_ids;
+#     print QSUB "\n##Invoke IAP\nqsub -l h_rt=00:10:00 -o $rundir/logs -e $rundir/logs -R yes -N $variantcalling_job_id -hold_jid $hold_line $rundir/jobs/$variantcalling_job_id.sh\n\n";
+# }
+
+if ( $opt{variantcalling} eq "yes" ){
+    my ($variantcalling_job_id) = ("variantCalling_".get_job_id());
+    open VC, ">$rundir/jobs/$variantcalling_job_id.sh";
+    print VC "\#!/bin/bash\n\n";
+    print VC "uname -n > $rundir/logs/$variantcalling_job_id.host\n";
+    
+    #variant calling
+    my $rawvariants_vcf = "$rundir/".basename($rundir).".raw_variants.vcf";
+    print VC "if [ ! -s $rawvariants_vcf ]\nthen\n\tjava -Xmx10G -Djava.io.tmpdir=\$TMPDIR -jar $opt{gatk_path}\/GenomeAnalysisTK.jar -T HaplotypeCaller -R $opt{fasta} -I ". join(" -I ",@final_bams) ." -dontUseSoftClippedBases -stand_call_conf 20.0 -stand_emit_conf 20.0 -o $rawvariants_vcf\nfi\n\n";
+    
+    #variant filtering
+    my $filtered_vcf = "$rundir/".basename($rundir).".filtered_variants.vcf";
+    print VC "if [ -s $rawvariants_vcf ] && [ ! -s $filtered_vcf ]\nthen\n\tjava -Xmx10G -Djava.io.tmpdir=\$TMPDIR -jar $opt{gatk_path}\/GenomeAnalysisTK.jar -T VariantFiltration -R $opt{fasta} -V $rawvariants_vcf -o $filtered_vcf -window 10 -cluster 3 -filterName LowQualityDepth --filterExpression \"QD < 2.0\" -filterName MappingQuality --filterExpression \"MQ < 40.0\" -filterName StrandBias --filterExpression \"FS > 60.0\" -filterName HaplotypeScoreHigh --filterExpression \"HaplotypeScore > 13.0\" -filterName MQRankSumLow --filterExpression \"MQRankSum < -12.5\" -filterName ReadPosRankSumLow --filterExpression \"ReadPosRankSum < -8.0\" -filterName HardToValidate --filterExpression \"MQ0 >= 4 && ((MQ0 / (1.0 * DP)) > 0.1)\" -filterName LowCoverage --filterExpression \"DP < 5\" -filterName VeryLowQual --filterExpression \"QUAL < 30\" -filterName LowQual --filterExpression \"QUAL >= 30.0 && QUAL < 50.0\" -filterName SOR --filterExpression \"SOR > 4.0\"\n";
+    print VC "else\n\techo \"ERROR: $rawvariants_vcf does not exist.\"\nfi\n\n";
+    
+    #variant annotation
+    #snpEff
+    my $snpeff_vcf = "$rundir/".basename($rundir).".filtered_variants_snpEff.vcf";
+    print VC "if [ -s $filtered_vcf ] && [ ! -s $snpeff_vcf ]\nthen\n\tjava -Xmx15G -Djava.io.tmpdir=\$TMPDIR -jar ".$opt{snpEff_path}."/snpEff.jar -c ".$opt{snpEff_path}."/snpEff.config $opt{annotate_db} -v $filtered_vcf -hgvs -lof -no-downstream -no-upstream -no-intergenic > $snpeff_vcf\n";
+    #igvtools index
+    print VC "\t$opt{igvtools_path} index $snpeff_vcf\n\trm igv.log\n\n";
+    print VC "else\n\techo \"ERROR: $filtered_vcf does not exist.\"\nfi\n\n";
+    
+    
+    if ( $SPECIES eq 'HUMAN' ){
+	#SnpSift
+	my $snpsift_vcf = "$rundir/".basename($rundir).".filtered_variants_snpEff_snpSift.vcf";
+	my $snpsift_fields = "hg38_chr,hg38_pos,genename,Uniprot_acc,Uniprot_id,Uniprot_aapos,Interpro_domain,cds_strand,refcodon,SLR_test_statistic,codonpos,fold-degenerate,Ancestral_allele,Ensembl_geneid,Ensembl_transcriptid,aapos,aapos_SIFT,aapos_FATHMM,SIFT_score,SIFT_converted_rankscore,SIFT_pred,Polyphen2_HDIV_score,Polyphen2_HDIV_rankscore,Polyphen2_HDIV_pred,Polyphen2_HVAR_score,Polyphen2_HVAR_rankscore,Polyphen2_HVAR_pred,LRT_score,LRT_converted_rankscore,LRT_pred,MutationTaster_score,MutationTaster_converted_rankscore,MutationTaster_pred,MutationAssessor_score,MutationAssessor_rankscore,MutationAssessor_pred,FATHMM_score,FATHMM_rankscore,FATHMM_pred,MetaSVM_score,MetaSVM_rankscore,MetaSVM_pred,MetaLR_score,MetaLR_rankscore,MetaLR_pred,Reliability_index,VEST3_score,VEST3_rankscore,PROVEAN_score,PROVEAN_converted_rankscore,PROVEAN_pred,CADD_raw,CADD_raw_rankscore,CADD_phred,GERP++_NR,GERP++_RS,GERP++_RS_rankscore,phyloP46way_primate,phyloP46way_primate_rankscore,phyloP46way_placental,phyloP46way_placental_rankscore,phyloP100way_vertebrate,phyloP100way_vertebrate_rankscore,phastCons46way_primate,phastCons46way_primate_rankscore,phastCons46way_placental,phastCons46way_placental_rankscore,phastCons100way_vertebrate,phastCons100way_vertebrate_rankscore,SiPhy_29way_pi,SiPhy_29way_logOdds,SiPhy_29way_logOdds_rankscore,LRT_Omega,UniSNP_ids,1000Gp1_AC,1000Gp1_AF,1000Gp1_AFR_AC,1000Gp1_AFR_AF,1000Gp1_EUR_AC,1000Gp1_EUR_AF,1000Gp1_AMR_AC,1000Gp1_AMR_AF,1000Gp1_ASN_AC,1000Gp1_ASN_AF,ESP6500_AA_AF,ESP6500_EA_AF,ARIC5606_AA_AC,ARIC5606_AA_AF,ARIC5606_EA_AC,ARIC5606_EA_AF,ExAC_AC,ExAC_AF,ExAC_Adj_AC,ExAC_Adj_AF,ExAC_AFR_AC,ExAC_AFR_AF,ExAC_AMR_AC,ExAC_AMR_AF,ExAC_EAS_AC,ExAC_EAS_AF,ExAC_FIN_AC,ExAC_FIN_AF,ExAC_NFE_AC,ExAC_NFE_AF,ExAC_SAS_AC,ExAC_SAS_AF,clinvar_rs,clinvar_clnsig,clinvar_trait,COSMIC_ID,COSMIC_CNT";
+	print VC "if [ -s $snpeff_vcf ] && [ ! -s $snpsift_vcf ]\nthen\n\tjava -Xmx15G -Djava.io.tmpdir=\$TMPDIR -jar ".$opt{snpEff_path}."/SnpSift.jar dbnsfp -v -f $snpsift_fields -db $opt{dbnsfp_path} $snpeff_vcf > $snpsift_vcf\n";
+	#igvtools index
+	print VC "\t$opt{igvtools_path} index $snpsift_vcf\n\trm igv.log\n\n";
+	print VC "else\n\techo \"ERROR: $snpeff_vcf does not exist.\"\nfi\n\n";
+	print VC "if [ -s $snpsift_vcf ]\nthen\n\trm $snpeff_vcf $snpeff_vcf.idx\nfi\n\n";
+    }
+    my $hold_line = join ',',@hold_mapping_ids;
+    print QSUB "\n##Variant Calling\nqsub -l h_vmem=20G -pe threaded 4 -l h_rt=168:0:0 -o $rundir/logs -e $rundir/logs -R yes -N $variantcalling_job_id -hold_jid $hold_line $rundir/jobs/$variantcalling_job_id.sh\n\n";
+}
+
 if ( $opt{count} eq "yes" ){
     #merge count tables of all samples
     my ($mergeTables_job_id) = ("mergeTables_".get_job_id());
     open MT,">$rundir/jobs/$mergeTables_job_id.sh";
     print MT "\#!/bin/bash\n\n";
     print MT "uname -n > $rundir/logs/$mergeTables_job_id.host\n";
-    print MT "export MODULEPATH=/hpc/local/CentOS6/cog_bioinf/modules:\${MODULEPATH}\n";
+    #print MT "export MODULEPATH=/hpc/local/CentOS7/cog_bioinf/modules:\${MODULEPATH}\n";
     print MT "module load R/3.2.2\n";
     mergeRscript($rundir);
     print MT "time R --save --no-init-file < $rundir/jobs/merge.R\n";
@@ -530,7 +639,7 @@ if ( $opt{normalize} eq "yes"){
     open NM,">$rundir/jobs/$normTables_job_id.sh";
     print NM "\#!/bin/bash\n\n";
     print NM "uname -n > $rundir/logs/$normTables_job_id.host\n";
-    print NM "export MODULEPATH=/hpc/local/CentOS6/cog_bioinf/modules:\${MODULEPATH}\n";
+    #print NM "export MODULEPATH=/hpc/local/CentOS7/cog_bioinf/modules:\${MODULEPATH}\n";
     print NM "module load R/3.2.2\n";
     normalizeRscript($rundir);
     print NM "time R --save --no-init-file < $rundir/jobs/normalize.R\n";
@@ -550,7 +659,7 @@ if( $opt{rpkm} eq "yes"){
     open RP, ">$rundir/jobs/$rpkm_job_id.sh";
     print RP "\#!/bin/bash\n\n";
     print RP "uname -n > $rundir/logs/$rpkm_job_id.host\n";
-    print RP "export MODULEPATH=/hpc/local/CentOS6/cog_bioinf/modules:\${MODULEPATH}\n";
+    #print RP "export MODULEPATH=/hpc/local/CentOS7/cog_bioinf/modules:\${MODULEPATH}\n";
     print RP "module load R/3.2.2\n";
     rpkmRscript($rundir);
     print RP "time R --save --no-init-file --args $rundir < $rundir/jobs/rpkm.R\n";
@@ -570,7 +679,7 @@ if ( $opt{de} eq "yes"){
     open DE, ">$rundir/jobs/$de_job_id.sh";
     print DE "\#!/bin/bash\n\n";
     print DE "uname -n > $rundir/logs/$de_job_id.host\n";
-    print DE "export MODULEPATH=/hpc/local/CentOS6/cog_bioinf/modules:\${MODULEPATH}\n";
+    #print DE "export MODULEPATH=/hpc/local/CentOS7/cog_bioinf/modules:\${MODULEPATH}\n";
     print DE "module load R/3.2.2\n";
     deRscript($rundir);
     print DE "time R --save --no-init-file < $rundir/jobs/de.R\n";
@@ -603,12 +712,12 @@ if ( $opt{bamqc} eq "yes"){
 	$picard_strand = 'NONE' if $opt{stranded} eq 'no';
     }
     
-    print BQ "shopt -s nullglob\n\n";
-    print BQ "filearray=(\"$rundir\"/*/mapping/*_sorted.bam)\n\n";
-    print BQ "bar=\$(printf \",%s\" \"\${filearray[\@]}\")\n\n";
-    print BQ "bamline=`echo \$bar | sed 's/,/ -bam /g'`\n\n";
+#     print BQ "shopt -s nullglob\n\n";
+#     print BQ "filearray=(\"$rundir\"/*/mapping/*_sorted.bam)\n\n";
+#     print BQ "bar=\$(printf \",%s\" \"\${filearray[\@]}\")\n\n";
+#     print BQ "bamline=`echo \$bar | sed 's/,/ -bam /g'`\n\n";
     if ( $paired==0 ){
-	print BQ "perl $opt{bamstats_path} \${bamline} -queue_threads 2 -debug -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -single_end -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
+	print BQ "perl $opt{bamstats_path} -bam ".join(" -bam ",@final_bams)." \${bamline} -queue_threads 2 -debug -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -single_end -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
     }
     elsif ( $paired==1 ){
 	print BQ "perl $opt{bamstats_path} \${bamline} -queue_threads 2 -debug -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
@@ -624,7 +733,6 @@ if ( $opt{bamqc} eq "yes"){
     #cleaning
     print CL "if [ -f $rundir/bamMetrics/$runname.bamMetrics.pdf ]; then rm -r $rundir/bamMetrics/tmp; fi\n";
     close CL;
-    
 }
 
 close SETTINGS;
@@ -666,7 +774,7 @@ nr_cols=0
 sampledir = ''
 for ( dir in dirs ){
     sample=basename(dir)
-    if ( (sample != 'read_counts') && (sample != 'bamMetrics') && (sample != 'logs') && (sample != 'jobs') && (sample != 'DEanalysis') ){
+    if ( (sample != 'read_counts') && (sample != 'bamMetrics') && (sample != 'logs') && (sample != 'jobs') && (sample != 'DEanalysis') && (sample != 'variantCalling') ){
 	nr_cols = nr_cols+1
 	sampledir = dir
     }
@@ -679,7 +787,7 @@ samplenames=c('gene')
 
 for ( dir in dirs ) {
     sample=basename(dir)
-    if ( (sample != 'read_counts') && (sample != 'bamMetrics') && (sample != 'jobs') && (sample != 'logs') && (sample != 'DEanalysis') ) {
+    if ( (sample != 'read_counts') && (sample != 'bamMetrics') && (sample != 'jobs') && (sample != 'logs') && (sample != 'DEanalysis') && (sample != 'variantCalling') ) {
 	samplenames <- append(samplenames, as.character(sample))
 	countsfile=paste("$rundir/",sample,'/read_counts/',sample,'_htseq_counts.txt',sep="")
 	counts=read.table(countsfile,sep="\\t",header=F)
