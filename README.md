@@ -12,6 +12,7 @@ This pipeline performs the following tasks:
   - normalize read counts (using DESeq)
   - calculate RPKMs (using edgeR)
   - perform DE analysis for standard designs (using DESeq2)
+  - variant calling, filtering and annotation
 
 
 1. Running the pipeline
@@ -93,7 +94,15 @@ DE analysis is done using the DESeq2 Bioconductor package. It takes the merged r
  - <run>_PCAplot.png: principal component plot of the samples.
 
 
-8. Additional tools
+8. Variant calling, filtering and annotation
+============================================
+
+For the variant calling and filtering, GATK's HaplotypeCaller and VariantFiltration tool is used.
+SnpEff is used to add genetic variant annotation and effect predictions to the vcf.
+In case of human genome data, also the vcf will be annotated with the dbNSFP database using SnpSift.
+
+
+9. Additional tools
 ===================
 
 Please contact Annelies Barendregt (F.A.S.Smouter@umcutrecht.nl) if you want to add additional tools/scripts/options.
