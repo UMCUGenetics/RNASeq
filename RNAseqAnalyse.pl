@@ -30,6 +30,7 @@ sub usage{
     -pe|nthreads                      [i]	Number of threads for processes run on execute nodes. [number] Default: 4
     -fqc|fastqc                       [s]	Perform FastQC? [yes/no] Default: yes
     -m|mapping                        [s]	Perform mapping with STAR? [yes/no] Default: yes
+    -smallRNA                         [s]	Use STAR settings for small RNA dataset? [yes/no] Default: no
     -stranded                         [s]	Is the RNA-seq data from a strand-specific assay? [yes/no/reversed] Default: reversed
     -fusionSearch                     [s]	Want to detect fusion genes? [yes/no] Default: yes
     -c|count                          [s]	Want to count the mapped reads? [yes/no] Default: yes
@@ -87,6 +88,7 @@ my %opt;
     'chimSegmentMin'			=> 15,
     'outSJfilterIntronMaxVsReadN'	=> 10000000,
     'chimJunctionOverhangMin'		=> 15,
+    'smallRNA'				=> "no",
     'species'				=> "HUMAN",
     'genome'				=> '/hpc/cog_bioinf/GENOMES/STAR',
     'fasta'				=> undef,
@@ -130,6 +132,7 @@ GetOptions (
     'de=s'				=> \$opt{de},
     'design=s'				=> \$opt{design},
     'vc|variantcalling=s'		=> \$opt{variantcalling},
+    'smallRNA=s'			=> \$opt{smallRNA},
     'bamqc=s'				=> \$opt{bamqc},
     'id=s'				=> \$opt{id},
     'uniq=s'				=> \$opt{uniq},
@@ -155,6 +158,8 @@ die "[ERROR] Wrong option ($opt{normalize}) given with -normalize. Must be \"yes
 die "[ERROR] Wrong option ($opt{rpkm}) given with -rpkm. Must be \"yes\" or \"no\".\n" if ( ($opt{rpkm} ne "no") && ($opt{rpkm} ne "yes") );
 die "[ERROR] Wrong option ($opt{uniq}) given with -uniq. Must be \"yes\" or \"no\".\n" if ( ($opt{uniq} ne "no") && ($opt{uniq} ne "yes") );
 die "[ERROR] Wrong option ($opt{id}) given with -id. Must be \"gene_id\", \"transcript_id\", \"exon_id\" or \"all\".\n" if ( ($opt{id} ne "gene_id") && ($opt{id} ne "transcript_id") && ($opt{id} ne "exon_id") && ($opt{id} ne "all"));
+die "[ERROR] Wrong option ($opt{variantcalling}) given with -variantcalling. Must be \"yes\" or \"no\".\n" if ( ($opt{variantcalling} ne "no") && ($opt{variantcalling} ne "yes") );
+die "[ERROR] Wrong option ($opt{smallRNA}) given with -variantcalling. Must be \"yes\" or \"no\".\n" if ( ($opt{smallRNA} ne "no") && ($opt{smallRNA} ne "yes") );
 die "[ERROR] Must give design (-design) with -de option.\n" if ( ($opt{de} eq "yes") && (! $opt{design}) );
 die "[ERROR] Design file doesn't exist!\n" if ( ($opt{de} eq "yes") && (! -e $opt{design}) );
 die "[ERROR] Design file is not in right format. See -h for lay-out.\n" if ( ($opt{de} eq "yes") && (checkDesign($opt{design}) eq "wrong") );
@@ -372,6 +377,9 @@ foreach my $sample (keys %{$samples}) {
 	}
 	if (defined $opt{chimJunctionOverhangMin}) {
 	    $star_command .= " --chimJunctionOverhangMin " . $opt{chimJunctionOverhangMin};
+	}
+	if ($opt{smallRNA} eq "yes"){
+	    $star_command .= " --outFilterMultimapNmax 50 --outFilterMismatchNmax 10 --outFilterMismatchNoverLmax 0.3 --outFilterMatchNmin 16 --outFilterMatchNminOverLread 0 --outFilterScoreMinOverLread 0 --clip3pAdapterSeq TGGAATTCTCGGGTGCCAGG --clip3pAdapterMMp 0.1 --clip5pNbases 0 --alignIntronMax 1.0 --alignEndsType Local";
 	}
 	if ($opt{fusionSearch} eq "yes"){
 	    $star_command .= " --chimSegmentMin $opt{chimSegmentMin}";
@@ -712,15 +720,11 @@ if ( $opt{bamqc} eq "yes"){
 	$picard_strand = 'NONE' if $opt{stranded} eq 'no';
     }
     
-#     print BQ "shopt -s nullglob\n\n";
-#     print BQ "filearray=(\"$rundir\"/*/mapping/*_sorted.bam)\n\n";
-#     print BQ "bar=\$(printf \",%s\" \"\${filearray[\@]}\")\n\n";
-#     print BQ "bamline=`echo \$bar | sed 's/,/ -bam /g'`\n\n";
     if ( $paired==0 ){
-	print BQ "perl $opt{bamstats_path} -bam ".join(" -bam ",@final_bams)." \${bamline} -queue_threads 2 -debug -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -single_end -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
+	print BQ "perl $opt{bamstats_path} -bam ".join(" -bam ",@final_bams)." -queue_threads 2 -debug -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -single_end -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
     }
     elsif ( $paired==1 ){
-	print BQ "perl $opt{bamstats_path} \${bamline} -queue_threads 2 -debug -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
+	print BQ "perl $opt{bamstats_path} -bam ".join(" -bam ",@final_bams)." -queue_threads 2 -debug -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
     }
     close BQ;
     if ( $opt{mapping} eq "no" ){
