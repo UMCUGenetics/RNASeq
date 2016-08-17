@@ -26,7 +26,7 @@ sub usage{
     
     Options:
     -h|help                           [s]	Help
-    -sp|species                       [s]	Species of RNA-seq data [HUMAN/RAT/MOUSE/ZEBRAFISH/DOG] Default: HUMAN
+    -sp|species                       [s]	Species of RNA-seq data [HUMAN/RAT/MOUSE/ZEBRAFISH/DOG/ARABIDOPSIS] Default: HUMAN
     -pe|nthreads                      [i]	Number of threads for processes run on execute nodes. [number] Default: 4
     -fqc|fastqc                       [s]	Perform FastQC? [yes/no] Default: yes
     -m|mapping                        [s]	Perform mapping with STAR? [yes/no] Default: yes
@@ -96,7 +96,6 @@ my %opt;
     'gtf_file'				=> undef,
     'refflat_file'			=> undef,
     'genesizes_file'			=> undef,
-    'ini_file'				=> undef,
     'fastqc_path'			=> '/hpc/local/CentOS7/cog_bioinf/FastQ-v0.11.4/fastqc',
 #     'star_path'				=> '/hpc/local/CentOS7/cog_bioinf/STAR-2.5.0c/source/STAR',
     'star_path'				=> '/hpc/local/CentOS7/cog_bioinf/STAR-STAR_2.4.2a/source/STAR',
@@ -165,7 +164,7 @@ die "[ERROR] Design file doesn't exist!\n" if ( ($opt{de} eq "yes") && (! -e $op
 die "[ERROR] Design file is not in right format. See -h for lay-out.\n" if ( ($opt{de} eq "yes") && (checkDesign($opt{design}) eq "wrong") );
 
 my $SPECIES = uc $opt{species};
-my %annotationDB = ( 'HUMAN' => 'org.Hs', 'RAT' => 'org.Rn', 'MOUSE' => 'org.Mm', 'ZEBRAFISH' => 'org.Dr', 'DOG' => 'org.Cf' );
+my %annotationDB = ( 'HUMAN' => 'org.Hs.eg.db', 'RAT' => 'org.Rn.eg.db', 'MOUSE' => 'org.Mm.eg.db', 'ZEBRAFISH' => 'org.Dr.eg.db', 'DOG' => 'org.Cf.eg.db', 'ARABIDOPSIS' => 'org.At.tair.db' );
 my @knownSites = qw(/hpc/cog_bioinf/common_scripts/GATK_v2.7/bundle/1000G_phase1.indels.b37.vcf /hpc/cog_bioinf/common_scripts/GATK_v2.7/bundle/dbsnp_137.b37.vcf /hpc/cog_bioinf/common_scripts/GATK_v2.7/bundle/Mills_and_1000G_gold_standard.indels.b37.vcf);
 
 if ($SPECIES eq "HUMAN"){
@@ -175,7 +174,6 @@ if ($SPECIES eq "HUMAN"){
     $opt{refflat_file} = $opt{genome}.'/hg19.refFlat.gz';
     $opt{intervallist} = $opt{genome}.'/Homo_sapiens.GRCh37.GATK.illumina.rRNA.intervallist';
     $opt{genesizes_file} = $opt{genome}.'/Homo_sapiens.GRCh37.74_exon_gene_sizes.txt';
-    $opt{ini_file} = '/hpc/cog_bioinf/data/annelies/RNA_Seq/analysis/HUMAN/HUMAN.ini';
     $opt{annotate_db} = 'GRCh37.74';
 } elsif ($SPECIES eq "RAT"){
     $opt{genome} .= '/Rattus_norvegicus.Rnor50';
@@ -184,7 +182,6 @@ if ($SPECIES eq "HUMAN"){
     $opt{refflat_file} = $opt{genome}.'/rnor50.refFlat.gz';
     $opt{intervallist} = $opt{genome}.'/rno5_rRNA_intervallist.txt';
     $opt{genesizes_file} = $opt{genome}.'/Rattus_norvegicus.Rnor_5.0.71_exon_gene_sizes.txt';
-    $opt{ini_file} = '/hpc/cog_bioinf/data/annelies/RNA_Seq/analysis/RAT/RAT.ini';
     $opt{annotate_db} = 'Rnor_5.0.71';
 } elsif ($SPECIES eq "MOUSE"){
     $opt{genome} .= '/Mus_musculus.GRCm38';
@@ -193,7 +190,6 @@ if ($SPECIES eq "HUMAN"){
     $opt{refflat_file} = $opt{genome}.'/Mus_musculus_GRCm38.refFlat.gz';
     $opt{intervallist} = $opt{genome}.'/Mus_musculus_GRCm38.rRNA.intervallist';
     $opt{genesizes_file} = $opt{genome}.'/Mus_musculus.GRCm38.70_exon_gene_sizes.txt';
-    $opt{ini_file} = '/hpc/cog_bioinf/data/annelies/RNA_Seq/analysis/MOUSE/MOUSE.ini';
     $opt{annotate_db} = 'GRCm38.71';
 } elsif ($SPECIES eq "ZEBRAFISH"){
     $opt{genome} .= '/Danio_rerio.Zv9';
@@ -202,7 +198,6 @@ if ($SPECIES eq "HUMAN"){
     $opt{refflat_file} = $opt{genome}.'/zfish9.refFlat.gz';
     $opt{intervallist} = $opt{genome}.'/Danio_rerio.Zv9.75.rRNA.intervallist';
     $opt{genesizes_file} = $opt{genome}.'/Danio_rerio.Zv9.75_exon_gene_sizes.txt';
-    $opt{ini_file} = '/hpc/cog_bioinf/data/annelies/RNA_Seq/analysis/ZEBRAFISH/ZEBRAFISH.ini';
     $opt{annotate_db} = 'Zv9.75';
 } elsif ($SPECIES eq "DOG"){
     $opt{genome} .= '/Canis_familiaris.CanFam31';
@@ -211,10 +206,17 @@ if ($SPECIES eq "HUMAN"){
     $opt{refflat_file} = $opt{genome}.'/CanFam3.1.refFlat.gz';
     $opt{intervallist} = $opt{genome}.'/CanFam3.1_rRNA_genes.intervallist';
     $opt{genesizes_file} = $opt{genome}.'/Canis_familiaris.CanFam3.1.75_exon_gene_sizes.txt';
-    $opt{ini_file} = '/hpc/cog_bioinf/data/annelies/RNA_Seq/analysis/DOG/DOG.ini';
     $opt{annotate_db} = 'CanFam3.1.71';
-} else {
-    die "[ERROR] Wrong species ($SPECIES). Only HUMAN, RAT, MOUSE, DOG or ZEBRAFISH genomes are allowed.\n";
+} elsif ($SPECIES eq "ARABIDOPSIS"){
+    $opt{genome} .= '/Arabidopsis_thaliana.TAIR10';
+    $opt{fasta} = $opt{genome}.'/Arabidopsis_thaliana.TAIR10.30.fa';
+    $opt{gtf_file} = $opt{genome}.'/Arabidopsis_thaliana.TAIR10.30.gtf';
+    $opt{refflat_file} = $opt{genome}.'/Arabidopsis_thaliana.TAIR10.30.refFlat.gz';
+    $opt{intervallist} = $opt{genome}.'/Arabidopsis_thaliana.TAIR10.30.rRNA.intervallist';
+    $opt{genesizes_file} = $opt{genome}.'/Arabidopsis_thaliana.TAIR10.30_exon_gene_sizes.txt';
+    $opt{annotate_db} = 'athalianaTair10';
+}else {
+    die "[ERROR] Wrong species ($SPECIES). Only HUMAN, RAT, MOUSE, DOG, ZEBRAFISH or ARABIDOPSIS genomes are allowed.\n";
 }
 
 
@@ -379,7 +381,7 @@ foreach my $sample (keys %{$samples}) {
 	    $star_command .= " --chimJunctionOverhangMin " . $opt{chimJunctionOverhangMin};
 	}
 	if ($opt{smallRNA} eq "yes"){
-	    $star_command .= " --outFilterMultimapNmax 50 --outFilterMismatchNmax 10 --outFilterMismatchNoverLmax 0.3 --outFilterMatchNmin 16 --outFilterMatchNminOverLread 0 --outFilterScoreMinOverLread 0 --clip3pAdapterSeq TGGAATTCTCGGGTGCCAGG --clip3pAdapterMMp 0.1 --clip5pNbases 0 --alignIntronMax 1.0 --alignEndsType Local";
+	    $star_command .= " --outFilterMultimapNmax 50 --outFilterMismatchNmax 10 --outFilterMismatchNoverLmax 0.3 --outFilterMatchNmin 16 --outFilterMatchNminOverLread 0 --outFilterScoreMinOverLread 0 --clip3pAdapterSeq TGGAATTCTCGGGTGCCAAGG --clip3pAdapterMMp 0.1 --clip5pNbases 0 --alignIntronMax 1.0 --alignEndsType Local";
 	}
 	if ($opt{fusionSearch} eq "yes"){
 	    $star_command .= " --chimSegmentMin $opt{chimSegmentMin}";
@@ -568,19 +570,6 @@ foreach my $sample (keys %{$samples}) {
 	    }
 	}
 }
-
-# if ( $opt{variantcalling} eq "yes" ){
-#     my ($variantcalling_job_id) = ("variantCalling_".get_job_id());
-#     open VC, ">$rundir/jobs/$variantcalling_job_id.sh";
-#     print VC "\#!/bin/bash\n\n";
-#     print VC "uname -n > $rundir/logs/$variantcalling_job_id.host\n";
-#     print VC "mkdir $rundir/variantCalling/bams\n";
-#     print VC "for i in $rundir/*/mapping/*_splitN.bam*; do file=`basename \$i`; ln -s \$i $rundir/variantCalling/bams/\$file; done\n";
-#     print VC "perl $opt{IAP_path}/illumina_createConfig.pl -ip $opt{ini_file} -o $rundir/variantCalling -b $rundir/variantCalling/bams -m $opt{mail} -run\n";
-#     close VC;
-#     my $hold_line = join ',',@hold_mapping_ids;
-#     print QSUB "\n##Invoke IAP\nqsub -l h_rt=00:10:00 -o $rundir/logs -e $rundir/logs -R yes -N $variantcalling_job_id -hold_jid $hold_line $rundir/jobs/$variantcalling_job_id.sh\n\n";
-# }
 
 if ( $opt{variantcalling} eq "yes" ){
     my ($variantcalling_job_id) = ("variantCalling_".get_job_id());
@@ -883,10 +872,11 @@ sub deRscript{
     my $rundir = shift;
     my $runname = basename($rundir);
     my $annotationdb = $annotationDB{$SPECIES};
+    my $shortname = join('.', (split('\.',$annotationdb))[0,1]);
     my $design = $opt{design};
     open deRscript, ">$rundir/jobs/de.R" or die "cannot open Rscript\n";
     print deRscript <<EOS;
-library($annotationdb.eg.db)
+library($annotationdb)
 library(DESeq2)
 library(ggplot2)
 library(gplots)
@@ -896,7 +886,7 @@ outdir="$rundir/DEanalysis/"
 
 # # ----- GENE ANNOTATIONS --------
 # convert SYMBOL map to table
-s = toTable($annotationdb.egSYMBOL) 
+s = toTable($annotationdb.egSYMBOL)
 # convert ENSEMBL map to table
 t = toTable($annotationdb.egENSEMBL)
 # merge symbol map table to ensembl map table
