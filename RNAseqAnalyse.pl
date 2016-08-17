@@ -97,7 +97,6 @@ my %opt;
     'refflat_file'			=> undef,
     'genesizes_file'			=> undef,
     'fastqc_path'			=> '/hpc/local/CentOS7/cog_bioinf/FastQ-v0.11.4/fastqc',
-#     'star_path'				=> '/hpc/local/CentOS7/cog_bioinf/STAR-2.5.0c/source/STAR',
     'star_path'				=> '/hpc/local/CentOS7/cog_bioinf/STAR-STAR_2.4.2a/source/STAR',
     'sambamba_path'			=> '/hpc/local/CentOS7/cog_bioinf/sambamba_v0.5.8/sambamba',
     'picard_path'			=> '/hpc/local/CentOS7/cog_bioinf/picard-tools-1.141/picard.jar',
@@ -105,9 +104,7 @@ my %opt;
     'bamstats_path'			=> '/hpc/local/CentOS7/cog_bioinf/bamMetrics/bamMetrics.pl',
     'snpEff_path'			=> '/hpc/local/CentOS7/cog_bioinf/snpEff_v4.1h',
     'igvtools_path'			=> '/hpc/local/CentOS7/cog_bioinf/igvtools-2.3.60/igvtools',
-    'IAP_path'				=> '/hpc/local/CentOS7/cog_bioinf/IAP_DEV',
     'dbnsfp_path'			=> '/hpc/cog_bioinf/common_dbs/dbNSFP/dbNSFPv2.9/dbNSFP2.9.txt.gz',
-    'gonl_path'				=> '/hpc/cog_bioinf/common_dbs/GoNL/gonl_release5/site_freqs/gonl.snps_indels.r5.sorted.vcf.gz'
 );
 
 die usage() if @ARGV == 0;

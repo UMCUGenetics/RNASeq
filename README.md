@@ -17,7 +17,7 @@ git clone git@github.com:CuppenResearch/RNASeq.git
 
 ## Installation
 [Download](#download) the RNAseq pipeline.
-Make sure all [dependencies](#dependencies) are installed and the right paths are set in the pipeline (RNAseqAnalyse.pl).
+Make sure all [dependencies](#dependencies) are installed and the right paths are set in the pipeline (RNAseqAnalyse.pl) in the "Get options" section.
 
 #### Genome files
 Generate genome indexes files using the instructions in section [Generate genome indexes](#generate-genome-indexes). The genome indexes are saved to disk and need only be generated once for each genome/annotation combination.
@@ -49,8 +49,9 @@ perl RNAseqAnalyse.pl
 - [FastQC](http://www.bioinformatics.babraham.ac.uk/projects/fastqc/)
 - [Sambamba](http://lomereiter.github.io/sambamba/)
 - [bamMetrics](https://github.com/CuppenResearch/bamMetrics)
-- [GATK (genomeanalysis toolkit) and GATK QUEUE >= 3.2-2](https://www.broadinstitute.org/gatk/)
+- [GATK (genomeanalysis toolkit) >= 3.2-2](https://www.broadinstitute.org/gatk/)
 - [Picard >= 1.119](http://broadinstitute.github.io/picard/) 
+- [IGVtools](https://www.broadinstitute.org/igv/igvtools)
 - [SnpEff / SnpSift](http://snpeff.sourceforge.net/)
 
 #### Perl modules
@@ -81,6 +82,9 @@ perl RNAseqAnalyse.pl
     - Zebrafish: org.Dr.eg.db
     - Dog: org.Cf.eg.db
     - Arabidopsis: org.At.tair.db
+
+#### Databases
+- dbNSFP 2.9
 
 ## Generate genome indexes
 Create a directory where you want to store the indexes (e.g. /GENOMES/STAR/Homo_sapiens.GRCh37).
