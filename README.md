@@ -18,10 +18,14 @@ git clone git@github.com:CuppenResearch/RNASeq.git
 ## Usage
 #### Installation
 [Download](#download) the RNAseq pipeline.
-Make sure all dependencies (listed below) are installed and the right paths are used in the pipeline (RNAseqAnalyse.pl).
+Make sure all [dependencies](#dependencies) are installed and the right paths are set in the pipeline (RNAseqAnalyse.pl).
 
-#### Build genomes
+#### Genome files
 Generate genome indexes files using the instructions in section [Generate genome indexes](#generate-genome-indexes). The genome indexes are saved to disk and need only be generated once for each genome/annotation combination.
+Next to the files you had to collect to generate the genome indexes, you need:
+- refFlat file (for using bamMetrics)
+- Interval list (for using bamMetrics)
+- Genesizes file (for calculating RPKMs)
 
 #### Run pipeline
 ```bash
@@ -84,7 +88,7 @@ Collect the following files for your genome:
 
 Run STAR:
 ```bash
-STAR
+STAR \
     --runMode genomeGenerate \
     --genomeDir /path/to/genomeDir \
     --genomeFastaFiles /path/to/genome/fasta.fa \
