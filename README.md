@@ -15,8 +15,7 @@ Use git clone:
 git clone git@github.com:CuppenResearch/RNASeq.git
 ```
 
-## Usage
-#### Installation
+## Installation
 [Download](#download) the RNAseq pipeline.
 Make sure all [dependencies](#dependencies) are installed and the right paths are set in the pipeline (RNAseqAnalyse.pl).
 
@@ -27,6 +26,7 @@ Next to the files you had to collect to generate the genome indexes, you need:
 - Interval list (for using bamMetrics)
 - Genesizes file (for calculating RPKMs)
 
+## Usage
 #### Run pipeline
 ```bash
 perl RNAseqAnalyse.pl -input [/path/to/rundir] -outputDir [/path/to/outputdirname]
@@ -39,13 +39,13 @@ perl RNAseqAnalyse.pl
 ## Dependencies
 #### Core tools
 - Opengrid engine
-- Perl
+- Perl 5
 - Python 2.7
 - R 3.2.2
 - Java 1.7
 
 #### Bio tools
-- [STAR 2.4.2a] (https://github.com/alexdobin/STAR/releases/tag/STAR_2.4.2a)
+- [STAR 2.4.2a](https://github.com/alexdobin/STAR/releases/tag/STAR_2.4.2a)
 - [FastQC](http://www.bioinformatics.babraham.ac.uk/projects/fastqc/)
 - [Sambamba](http://lomereiter.github.io/sambamba/)
 - [bamMetrics](https://github.com/CuppenResearch/bamMetrics)
@@ -64,10 +64,13 @@ perl RNAseqAnalyse.pl
 - List::MoreUtils
 - Time::localtime
 
+#### Python packages
+- [HTSeq 0.6.1](https://pypi.python.org/pypi/HTSeq)
+
 #### R packages
-- DESeq
-- DESeq2
-- edgeR
+- DESeq 1.18.0
+- DESeq2 1.6.3
+- edgeR 3.8.6
 - ggplot2
 - gplots
 - RColorBrewer
