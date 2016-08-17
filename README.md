@@ -49,8 +49,9 @@ perl RNAseqAnalyse.pl
 - [FastQC](http://www.bioinformatics.babraham.ac.uk/projects/fastqc/)
 - [Sambamba](http://lomereiter.github.io/sambamba/)
 - [bamMetrics](https://github.com/CuppenResearch/bamMetrics)
-- [GATK (genomeanalysis toolkit) and GATK QUEUE >= 3.2-2](https://www.broadinstitute.org/gatk/)
+- [GATK (genomeanalysis toolkit) >= 3.2-2](https://www.broadinstitute.org/gatk/)
 - [Picard >= 1.119](http://broadinstitute.github.io/picard/) 
+- [IGVtools](https://www.broadinstitute.org/igv/igvtools)
 - [SnpEff / SnpSift](http://snpeff.sourceforge.net/)
 
 #### Perl modules
