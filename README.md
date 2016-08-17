@@ -1,4 +1,53 @@
-RNA-SEQ PIPELINE
+## RNA-SEQ PIPELINE
+
+## Download
+Use git clone:
+```bash
+git clone git@github.com:CuppenResearch/RNASeq.git
+```
+
+## Dependencies
+#### Core tools
+- Opengrid engine
+- Perl
+- Python 2.7
+- R 3.2.2
+- Java 1.7
+
+#### Bio tools
+- [FastQC](http://www.bioinformatics.babraham.ac.uk/projects/fastqc/)
+- [Sambamba](http://lomereiter.github.io/sambamba/)
+- [bamMetrics](https://github.com/CuppenResearch/bamMetrics)
+- [GATK (genomeanalysis toolkit) and GATK QUEUE >= 3.2-2](https://www.broadinstitute.org/gatk/)
+- [Picard >= 1.119](http://broadinstitute.github.io/picard/) 
+- [SnpEff / SnpSift](http://snpeff.sourceforge.net/)
+
+#### Perl modules
+- strict
+- warnings
+- POSIX
+- Getopt::Long
+- File::Basename
+- File::Path
+- Cwd
+- List::MoreUtils
+- Time::localtime
+
+#### R packages
+- DESeq
+- DESeq2
+- edgeR
+- ggplot2
+- gplots
+- RColorBrewer
+- Bioconductor annotations for:
+    - Human: org.Hs.eg.db
+    - Rat: org.Rn.eg.db
+    - Mouse: org.Mm.eg.db
+    - Zebrafish: org.Dr.eg.db
+    - Dog: org.Cf.eg.db
+    - Arabidopsis: org.At.tair.db
+
 
 
 0. Tasks
