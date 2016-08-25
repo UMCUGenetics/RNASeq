@@ -71,6 +71,7 @@ my %opt;
     'outputDir'				=> undef,
 #     'mail'				=> undef,
     'nthreads'				=> 4,
+    'queue_project'			=> 'cog_bioinf',
     'fastqc'				=> "yes",
     'mapping'				=> "yes",
     'stranded'				=> "reversed",
@@ -707,10 +708,10 @@ if ( $opt{bamqc} eq "yes"){
     }
     
     if ( $paired==0 ){
-	print BQ "perl $opt{bamstats_path} -bam ".join(" -bam ",@final_bams)." -queue_threads 2 -debug -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -single_end -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
+	print BQ "perl $opt{bamstats_path} -bam ".join(" -bam ",@final_bams)." -queue_threads 2 -queue_project $opt{queue_project} -debug -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -single_end -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
     }
     elsif ( $paired==1 ){
-	print BQ "perl $opt{bamstats_path} -bam ".join(" -bam ",@final_bams)." -queue_threads 2 -debug -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
+	print BQ "perl $opt{bamstats_path} -bam ".join(" -bam ",@final_bams)." -queue_threads 2 -queue_project $opt{queue_project} -debug -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
     }
     close BQ;
     if ( $opt{mapping} eq "no" ){
