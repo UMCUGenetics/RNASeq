@@ -97,6 +97,11 @@ my %opt;
     'gtf_file'				=> undef,
     'refflat_file'			=> undef,
     'genesizes_file'			=> undef,
+    'known_sites'			=> [
+					    '/hpc/cog_bioinf/common_scripts/GATK_v2.7/bundle/1000G_phase1.indels.b37.vcf',
+					    '/hpc/cog_bioinf/common_scripts/GATK_v2.7/bundle/dbsnp_137.b37.vcf',
+					    '/hpc/cog_bioinf/common_scripts/GATK_v2.7/bundle/Mills_and_1000G_gold_standard.indels.b37.vcf'
+					   ],
     'fastqc_path'			=> '/hpc/local/CentOS7/cog_bioinf/FastQ-v0.11.4/fastqc',
     'star_path'				=> '/hpc/local/CentOS7/cog_bioinf/STAR-STAR_2.4.2a/source/STAR',
     'sambamba_path'			=> '/hpc/local/CentOS7/cog_bioinf/sambamba_v0.5.8/sambamba',
@@ -105,7 +110,8 @@ my %opt;
     'bamstats_path'			=> '/hpc/local/CentOS7/cog_bioinf/bamMetrics/bamMetrics.pl',
     'snpEff_path'			=> '/hpc/local/CentOS7/cog_bioinf/snpEff_v4.1h',
     'igvtools_path'			=> '/hpc/local/CentOS7/cog_bioinf/igvtools-2.3.60/igvtools',
-    'dbnsfp_path'			=> '/hpc/cog_bioinf/common_dbs/dbNSFP/dbNSFPv2.9/dbNSFP2.9.txt.gz',
+    'dbnsfp_path'			=> '/hpc/cog_bioinf/common_dbs/dbNSFP/dbNSFPv2.9/dbNSFP2.9.txt.gz'
+
 );
 
 die usage() if @ARGV == 0;
@@ -163,7 +169,7 @@ die "[ERROR] Design file is not in right format. See -h for lay-out.\n" if ( ($o
 
 my $SPECIES = uc $opt{species};
 my %annotationDB = ( 'HUMAN' => 'org.Hs.eg.db', 'RAT' => 'org.Rn.eg.db', 'MOUSE' => 'org.Mm.eg.db', 'ZEBRAFISH' => 'org.Dr.eg.db', 'DOG' => 'org.Cf.eg.db', 'ARABIDOPSIS' => 'org.At.tair.db' );
-my @knownSites = qw(/hpc/cog_bioinf/common_scripts/GATK_v2.7/bundle/1000G_phase1.indels.b37.vcf /hpc/cog_bioinf/common_scripts/GATK_v2.7/bundle/dbsnp_137.b37.vcf /hpc/cog_bioinf/common_scripts/GATK_v2.7/bundle/Mills_and_1000G_gold_standard.indels.b37.vcf);
+#my @knownSites = qw(/hpc/cog_bioinf/common_scripts/GATK_v2.7/bundle/1000G_phase1.indels.b37.vcf /hpc/cog_bioinf/common_scripts/GATK_v2.7/bundle/dbsnp_137.b37.vcf /hpc/cog_bioinf/common_scripts/GATK_v2.7/bundle/Mills_and_1000G_gold_standard.indels.b37.vcf);
 
 if ($SPECIES eq "HUMAN"){
     $opt{genome} .= '/Homo_sapiens.GRCh37';
@@ -495,8 +501,8 @@ foreach my $sample (keys %{$samples}) {
 	    #baserecalibrator
 	    if ( $SPECIES eq 'HUMAN' ){
 		print MAPPING_SH "\n###Base Recalibration\n";
-		print MAPPING_SH "java -Xmx32G -Djava.io.tmpdir=\$TMPDIR -jar $opt{gatk_path}\/GenomeAnalysisTK.jar -T BaseRecalibrator -R $opt{fasta} -I $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned.bam -knownSites " . join(" -knownSites ", @knownSites) . " -o $rundir/$sample/mapping/$sample\_recal_data.table\n";
-		print MAPPING_SH "java -Xmx32G -Djava.io.tmpdir=\$TMPDIR -jar $opt{gatk_path}\/GenomeAnalysisTK.jar -T BaseRecalibrator -R $opt{fasta} -I $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned.bam -knownSites " . join(" -knownSites ", @knownSites) . " -BQSR $rundir/$sample/mapping/$sample\_recal_data.table -o $rundir/$sample/mapping/$sample\_post_recal_data.table\n";
+		print MAPPING_SH "java -Xmx32G -Djava.io.tmpdir=\$TMPDIR -jar $opt{gatk_path}\/GenomeAnalysisTK.jar -T BaseRecalibrator -R $opt{fasta} -I $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned.bam -knownSites " . join(" -knownSites ", @{ $opt{known_sites} } ) . " -o $rundir/$sample/mapping/$sample\_recal_data.table\n";
+		print MAPPING_SH "java -Xmx32G -Djava.io.tmpdir=\$TMPDIR -jar $opt{gatk_path}\/GenomeAnalysisTK.jar -T BaseRecalibrator -R $opt{fasta} -I $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned.bam -knownSites " . join(" -knownSites ", @{ $opt{known_sites} } ) . " -BQSR $rundir/$sample/mapping/$sample\_recal_data.table -o $rundir/$sample/mapping/$sample\_post_recal_data.table\n";
 		print MAPPING_SH "java -Xmx32G -Djava.io.tmpdir=\$TMPDIR -jar $opt{gatk_path}\/GenomeAnalysisTK.jar -T AnalyzeCovariates -R $opt{fasta} -before $rundir/$sample/mapping/$sample\_recal_data.table -after $rundir/$sample/mapping/$sample\_post_recal_data.table -plots $rundir/$sample/mapping/$sample\_recalibration_plots.pdf\n";
 		print MAPPING_SH "java -Xmx32G -Djava.io.tmpdir=\$TMPDIR -jar $opt{gatk_path}\/GenomeAnalysisTK.jar -T PrintReads -R $opt{fasta} -I $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned.bam -BQSR $rundir/$sample/mapping/$sample\_recal_data.table -o $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned_recal.bam\n";
 		print MAPPING_SH "$opt{sambamba_path} flagstat -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned_recal.bam > $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned_recal.flagstat\n";
