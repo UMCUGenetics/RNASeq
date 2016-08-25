@@ -890,9 +890,9 @@ outdir="$rundir/DEanalysis/"
 
 # # ----- GENE ANNOTATIONS --------
 # convert SYMBOL map to table
-s = toTable($annotationdb.egSYMBOL)
+s = toTable($shortname.egSYMBOL)
 # convert ENSEMBL map to table
-t = toTable($annotationdb.egENSEMBL)
+t = toTable($shortname.egENSEMBL)
 # merge symbol map table to ensembl map table
 gene_annotations = merge(t, s, by.x = "gene_id", by.y = "gene_id")
 
