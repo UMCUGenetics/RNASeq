@@ -100,7 +100,7 @@ my %opt;
     'fastqc_path'			=> '/hpc/local/CentOS7/cog_bioinf/FastQ-v0.11.4/fastqc',
     'star_path'				=> '/hpc/local/CentOS7/cog_bioinf/STAR-STAR_2.4.2a/source/STAR',
     'sambamba_path'			=> '/hpc/local/CentOS7/cog_bioinf/sambamba_v0.5.8/sambamba',
-    'picard_path'			=> '/hpc/local/CentOS7/cog_bioinf/picard-tools-1.141/picard.jar',
+    'picard_path'			=> '/hpc/local/CentOS7/cog_bioinf/picard-tools-1.141/',
     'gatk_path'				=> '/hpc/local/CentOS7/cog_bioinf/GenomeAnalysisTK-3.4-46',
     'bamstats_path'			=> '/hpc/local/CentOS7/cog_bioinf/bamMetrics/bamMetrics.pl',
     'snpEff_path'			=> '/hpc/local/CentOS7/cog_bioinf/snpEff_v4.1h',
@@ -469,14 +469,14 @@ foreach my $sample (keys %{$samples}) {
 	print MAPPING_SH $star_command;
 	
 	#add read groups
-	print MAPPING_SH "java -Xmx32G -Djava.io.tmpdir=\$TMPDIR -jar $opt{picard_path} AddOrReplaceReadGroups INPUT=$rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.sortedByCoord.out.bam OUTPUT=$rundir/$sample/mapping/$sample\_sort.bam RGID=$ID RGLB=$LB RGPL=$PL RGPU=$PU RGSM=$SM\n";
+	print MAPPING_SH "java -Xmx32G -Djava.io.tmpdir=\$TMPDIR -jar $opt{picard_path}/picard.jar AddOrReplaceReadGroups INPUT=$rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.sortedByCoord.out.bam OUTPUT=$rundir/$sample/mapping/$sample\_sort.bam RGID=$ID RGLB=$LB RGPL=$PL RGPU=$PU RGSM=$SM\n";
 	print MAPPING_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sort.bam\n";
 	my $finalbam = "$rundir/$sample/mapping/$sample\_sort.bam";
 	
 	if ( $opt{variantcalling} eq 'yes'){
 	    #mark duplicates
 	    print MAPPING_SH "\n###Mark Duplicates\n";
-	    print MAPPING_SH "java -Xmx32G -Djava.io.tmpdir=\$TMPDIR -jar $opt{picard_path} MarkDuplicates INPUT=$rundir/$sample/mapping/$sample\_sort.bam OUTPUT=$rundir/$sample/mapping/$sample\_sort_dedup.bam CREATE_INDEX=true VALIDATION_STRINGENCY=SILENT M=$rundir/$sample/mapping/$sample\_markDup_metrics.txt\n";
+	    print MAPPING_SH "java -Xmx32G -Djava.io.tmpdir=\$TMPDIR -jar $opt{picard_path}/picard.jar MarkDuplicates INPUT=$rundir/$sample/mapping/$sample\_sort.bam OUTPUT=$rundir/$sample/mapping/$sample\_sort_dedup.bam CREATE_INDEX=true VALIDATION_STRINGENCY=SILENT M=$rundir/$sample/mapping/$sample\_markDup_metrics.txt\n";
 	    print MAPPING_SH "$opt{sambamba_path} flagstat -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sort_dedup.bam > $rundir/$sample/mapping/$sample\_sort_dedup.flagstat\n";
 	    print MAPPING_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sort_dedup.bam\n";
 	    #splitNCigarReads
@@ -708,10 +708,10 @@ if ( $opt{bamqc} eq "yes"){
     }
     
     if ( $paired==0 ){
-	print BQ "perl $opt{bamstats_path} -bam ".join(" -bam ",@final_bams)." -queue_threads 2 -queue_project $opt{queue_project} -debug -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -single_end -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
+	print BQ "perl $opt{bamstats_path} -bam ".join(" -bam ",@final_bams)." -queue_threads 2 -queue_project $opt{queue_project} -picard_path $opt{picard_path} -debug -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -single_end -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
     }
     elsif ( $paired==1 ){
-	print BQ "perl $opt{bamstats_path} -bam ".join(" -bam ",@final_bams)." -queue_threads 2 -queue_project $opt{queue_project} -debug -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
+	print BQ "perl $opt{bamstats_path} -bam ".join(" -bam ",@final_bams)." -queue_threads 2 -queue_project $opt{queue_project} -picard_path $opt{picard_path} -debug -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
     }
     close BQ;
     if ( $opt{mapping} eq "no" ){
