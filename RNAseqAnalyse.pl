@@ -870,7 +870,7 @@ sub deRscript{
     my $runname = basename($rundir);
     my $annotationdb = $annotationDB{$SPECIES};
     my $shortname = join('.', (split('\.',$annotationdb))[0,1]);
-    my $design = $opt{design};
+    my $design = abs_path($opt{design});
     open deRscript, ">$rundir/jobs/de.R" or die "cannot open Rscript\n";
     print deRscript <<EOS;
 library($annotationdb)
