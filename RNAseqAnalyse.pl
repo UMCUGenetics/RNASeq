@@ -519,7 +519,7 @@ foreach my $sample (keys %{$samples}) {
 	print QSUB "\n";
 	
 	if ($opt{mapping} eq "yes") {
-	    print QSUB "##MAPPING\nqsub -l h_rt=08:00:00,h_vmem=100G,tmpspace=100G -pe threaded $opt{nthreads} -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $job_id $rundir/$sample/jobs/$job_id.sh\n\n";
+	    print QSUB "##MAPPING\nqsub -l h_rt=08:00:00,h_vmem=100G -pe threaded $opt{nthreads} -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $job_id $rundir/$sample/jobs/$job_id.sh\n\n";
 	}
 	
 	#get read counts of mapped reads
