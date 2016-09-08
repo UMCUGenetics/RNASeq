@@ -239,7 +239,7 @@ foreach my $fastqdir (@input){
     if ( ! -e $fastqdir ){ die "$fastqdir does not exist." }
     my @fastqfiles = glob($fastqdir."/*{/,}*_R1_*.fastq.gz");
     foreach my $fastq (@fastqfiles){
-	my $pattern = 'Undertermined';
+	my $pattern = 'Undetermined';
 	push @samplefiles, $fastq unless $fastq =~ /$pattern/;
     }
 }
