@@ -12,7 +12,7 @@ This pipeline performs the following tasks:
 ## Download
 Use git clone:
 ```bash
-git clone git@github.com:CuppenResearch/RNASeq.git
+git clone git@github.com:UMCUGenetics/RNASeq.git
 ```
 
 ## Installation
