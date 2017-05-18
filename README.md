@@ -29,7 +29,7 @@ Next to the files you had to collect to generate the genome indexes, you need:
 ## Usage
 #### Run pipeline
 ```bash
-perl RNAseqAnalyse.pl -input [/path/to/rundir] -outputDir [/path/to/outputdirname]
+perl RNAseqAnalyse.pl -input [/path/to/rundir] -outputDir [/path/to/outputdirname] -mail [email]
 ```
 To see additional parameters, just type:
 ```bash
