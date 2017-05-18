@@ -155,7 +155,8 @@ die usage() if $opt{help};
 die "[ERROR] Number of threads must be at least 3!\n" if ($opt{nthreads} < 3);
 die usage() unless ( $opt{input} );
 die usage() unless ( $opt{outputDir} );
-die useage() unless ( $opt{sgeProjectName});
+die usage() unless ( $opt{sgeProjectName});
+die usage() unless ( $opt{mail});
 die "[ERROR] Nothing to do!\n" if ( ($opt{fastqc} eq "no") && ($opt{mapping} eq "no") && ($opt{count} eq "no") && ($opt{normalize} eq "no") && ($opt{rpkm} eq "no") && ($opt{bamqc} eq "no") && ($opt{de} eq "no") && ($opt{vc} eq "no") );
 die "[ERROR] Wrong option ($opt{fastqc}) given with -fastqc. Must be \"yes\" or \"no\".\n" if ( ($opt{fastqc} ne "no") && ($opt{fastqc} ne "yes") );
 die "[ERROR] Wrong option ($opt{mapping}) given with -mapping. Must be \"yes\" or \"no\".\n" if ( ($opt{mapping} ne "no") && ($opt{mapping} ne "yes") );
@@ -360,13 +361,18 @@ print QSUB "\#!/bin/bash\n\#\$ \-o $rundir/logs\n\#\$ \-e $rundir/logs\n\n";
 my ($check_job_id) = ("check_".get_job_id());
 open CHECK, ">$rundir/jobs/$check_job_id.sh";
 print CHECK "\#!/bin/bash\n\n";
+print CHECK ". /opt/sge/default/common/settings.sh\n";
 print CHECK "uname -n > $rundir/logs/$check_job_id.host\n";
+print CHECK "failed=false\n";
+print CHECK "rm $rundir/logs/PipelineCheck.log\n";
+print CHECK "echo 'Check and clean for run: ".basename($rundir)."' >> $rundir/logs/PipelineCheck.log\n\n";
+
 
 #cleanup script
-my ($clean_job_id) = ("clean_".get_job_id());
-open CL, ">$rundir/jobs/$clean_job_id.sh";
-print CL "\#!/bin/bash\n\n";
-print CL "uname -n > $rundir/logs/$clean_job_id.host\n";
+# my ($clean_job_id) = ("clean_".get_job_id());
+# open CL, ">$rundir/jobs/$clean_job_id.sh";
+# print CL "\#!/bin/bash\n\n";
+# print CL "uname -n > $rundir/logs/$clean_job_id.host\n";
 
 my @hold_ids=();
 my @hold_mapping_ids=();
@@ -468,6 +474,10 @@ foreach my $sample (keys %{$samples}) {
       print FASTQC "\ttouch $rundir/$sample/logs/$R1_base\_fastqc.done\n";
       print FASTQC "fi\n";
   		print QSUB "##FastQC\nqsub -P $opt{sgeProjectName} -l h_rt=02:00:00 -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $FastQC1_job_id $rundir/$sample/jobs/$FastQC1_job_id.sh\n";
+      print CHECK checkDone("FASTQC",$R1,"$rundir/$sample/logs/$R1_base\_fastqc.done","$rundir/logs/PipelineCheck.log");
+
+
+
   		close FASTQC;
 
 
@@ -482,6 +492,7 @@ foreach my $sample (keys %{$samples}) {
         print FASTQC2 "\ttouch $rundir/$sample/logs/$R2_base\_fastqc.done\n";
         print FASTQC2 "fi\n";
 		    print QSUB "##FastQC\nqsub -P $opt{sgeProjectName} -l h_rt=02:00:00 -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $FastQC2_job_id $rundir/$sample/jobs/$FastQC2_job_id.sh\n";
+        print CHECK checkDone("FASTQC",$R2,"$rundir/$sample/logs/$R2_base\_fastqc.done","$rundir/logs/PipelineCheck.log");
 		    close FASTQC2;
   		}
     }
@@ -500,10 +511,19 @@ foreach my $sample (keys %{$samples}) {
 	#add read groups
 	print MAPPING_SH "java -Xmx32G -Djava.io.tmpdir=\$TMPDIR -jar $opt{picard_path}/picard.jar AddOrReplaceReadGroups INPUT=$rundir/$sample/mapping/tmp/$job_id/$sample\_Aligned.sortedByCoord.out.bam OUTPUT=$rundir/$sample/mapping/$sample\_sort.bam RGID=$ID RGLB=$LB RGPL=$PL RGPU=$PU RGSM=$SM\n";
 	print MAPPING_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sort.bam\n";
+  print MAPPING_SH "sleep 30\n";
+  print MAPPING_SH "READS_LOG=\$(cat $rundir/$sample/mapping/tmp/$job_id/$sample\_Log.final.out | grep 'Number of input reads' | cut -d'|' -f2 | sed -e 's/^[ \\t]*//')\n";
+  print MAPPING_SH "FASTQS=".join(",",$rest_fastqs,$R1_fastqs)."\n";
+  print MAPPING_SH "IFS=', ' read -r -a FASTQ_LIST <<< \$FASTQS\n";
+  print MAPPING_SH "READS_INPUT=0\n";
+  print MAPPING_SH "for FQ in \$FASTQ_LIST; do READ_COUNT=\$(zgrep -P '\@' \$FQ | wc -l); READS_INPUT=\$((\$READS_INPUT+\$READ_COUNT)); done\n";
+  print MAPPING_SH "if [[ \$READS_LOG -eq \$READS_INPUT ]];then touch $rundir/$sample/logs/$sample\_sort.done;fi\n";
+
+  print CHECK checkDone("SORT BAM","$rundir/$sample/mapping/$sample\_sort.bam","$rundir/$sample/logs/$sample\_sort.done","$rundir/logs/PipelineCheck.log");
+
+  print MAPPING_SH "$opt{sambamba_path} flagstat -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sort.bam > $rundir/$sample/mapping/$sample\_sort.flagstat\n";
 	my $finalbam = "$rundir/$sample/mapping/$sample\_sort.bam";
-  # print MAPPING_SH "if [ -s $R1_base\_fastqc.html ]; then\n";
-  # print MAPPING_SH "\ttouch $R1_base\_fastqc.done\n";
-  # print MAPPING_SH "fi\n";
+
 
 
 	if ( $opt{variantcalling} eq 'yes'){
@@ -525,6 +545,8 @@ foreach my $sample (keys %{$samples}) {
     print MAPPING_SH "$opt{sambamba_path} flagstat -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned.bam > $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned.flagstat\n";
     print MAPPING_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned.bam\n";
     $finalbam = "$rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned.bam";
+    my $finalflagstat = "$rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned.flagstat";
+    my $done = "$rundir/$sample/logs/$sample\_sort_dedup_splitN_realigned.done";
     #baserecalibrator
     if ( $SPECIES eq 'HUMAN' ){
   		print MAPPING_SH "\n###Base Recalibration\n";
@@ -535,7 +557,18 @@ foreach my $sample (keys %{$samples}) {
   		print MAPPING_SH "$opt{sambamba_path} flagstat -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned_recal.bam > $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned_recal.flagstat\n";
   		print MAPPING_SH "$opt{sambamba_path} index -t $opt{nthreads} $rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned_recal.bam\n";
   		$finalbam = "$rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned_recal.bam";
+      $finalflagstat = "$rundir/$sample/mapping/$sample\_sort_dedup_splitN_realigned_recal.flagstat";
+      $done = "$rundir/$sample/logs/$sample\_sort_dedup_splitN_realigned_recal.done";
     }
+    print MAPPING_SH "FS1=\$(grep -m 1 -P '\\d+ ' $rundir/$sample/mapping/$sample\_sort.flagstat | awk '{{split(\$0,columns , '+')} print columns[1]})\n";
+    print MAPPING_SH "FS2=\$(grep -m 1 -P '\\d+ ' $finalflagstat | awk '{{split(\$0,columns , '+')} print columns[1]})\n";
+    print MAPPING_SH "if [ \$FS1 -eq \$FS2 ]\n";
+    print MAPPING_SH "then\n";
+    print MAPPING_SH "\ttouch $done\n";
+    print MAPPING_SH "fi\n";
+    print CHECK checkDone("PREP BAM FOR VARIANTCALLING",$finalbam,$done,"$rundir/logs/PipelineCheck.log");
+
+    # FS1=`grep -m 1 -P "\d+ " MP18-3760-DNA-1_BHGW2JALXX_S2_L001_001.flagstat | awk '{{split($0,columns , "+")} print columns[1]}'
 	}
 	push @final_bams, $finalbam;
 
@@ -543,10 +576,10 @@ foreach my $sample (keys %{$samples}) {
 	#print MAPPING_SH "$opt{sambamba_path} index -t $opt{nthreads} $finalbam\n";
 
 	#remove and move files
-	print CL "rm $rundir/$sample/mapping/$sample\_*Aligned.sortedByCoord.out.bam\n";
+	print CHECK "rm $rundir/$sample/mapping/$sample\_*Aligned.sortedByCoord.out.bam\n";
 	print MAPPING_SH "mv $rundir/$sample/mapping/tmp/$job_id/* $rundir/$sample/mapping/\n";
-	print CL "rm -r $rundir/$sample/mapping/tmp\n";
-	print CL "rm -r $rundir/$sample/mapping/$sample\__STARtmp\n";
+	print CHECK "rm -r $rundir/$sample/mapping/tmp\n";
+	print CHECK "rm -r $rundir/$sample/mapping/$sample\__STARtmp\n";
 
 	close MAPPING_SH;
 
@@ -581,7 +614,16 @@ foreach my $sample (keys %{$samples}) {
   		print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sort.bam | python -m HTSeq.scripts.count -m union -r pos -s $s_val -i gene_id - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_gene_counts.txt\n";
   		print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sort.bam | python -m HTSeq.scripts.count -m union -r pos -s $s_val -i exon_id - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_exon_counts.txt\n";
   		print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sort.bam | python -m HTSeq.scripts.count -m union -r pos -s $s_val -i transcript_id - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_transcript_counts.txt\n";
-  		print HT "module unload python/2.7.10\n";
+# $rundir/$sample/read_counts/$sample\_htseq_gene_counts.txt
+# $rundir/$sample/read_counts/$sample\_htseq_exon_counts.txt
+# $rundir/$sample/read_counts/$sample\_htseq_transcript_counts.txt
+      print HT "if [ -s $rundir/$sample/read_counts/$sample\_htseq_gene_counts.txt ] && [ -s $rundir/$sample/read_counts/$sample\_htseq_exon_counts.txt ] && [ $rundir/$sample/read_counts/$sample\_htseq_transcript_counts.txt ]\n";
+      print HT "then\n";
+      print HT "\ttouch $rundir/$sample/logs/$sample\_htseq.done\n";
+      print HT "fi\n";
+      print HT "module unload python/2.7.10\n";
+      print CHECK checkDone("READ COUNTS","$rundir/$sample/mapping/$sample\_sort.bam","$rundir/$sample/read_counts/$sample\_htseq.done","$rundir/logs/PipelineCheck.log");
+
   		close HT;
   		if ( $opt{mapping} eq "no" ){
   	    print QSUB  "##HTSeq-count\nqsub -P $opt{sgeProjectName} -l h_rt=08:00:00 -o $rundir/$sample/logs -e $rundir/$sample/logs -R yes -N $HTSeqCount_job_id $rundir/$sample/jobs/$HTSeqCount_job_id.sh\n\n";
@@ -590,6 +632,11 @@ foreach my $sample (keys %{$samples}) {
 	    }
 	   }else{
   		print HT "$opt{sambamba_path} view $rundir/$sample/mapping/$sample\_sort.bam | python -m HTSeq.scripts.count -m union -r pos -s $s_val -i $opt{id} - $opt{gtf_file} > $rundir/$sample/read_counts/$sample\_htseq_counts.txt\n";
+      print HT "if [ -s $rundir/$sample/read_counts/$sample\_htseq_counts.txt ]\n";
+      print HT "then\n";
+      print HT "\ttouch $rundir/$sample/logs/$sample\_htseq.done\n";
+      print HT "fi\n";
+      print CHECK checkDone("READ COUNTS","$rundir/$sample/mapping/$sample\_sort.bam","$rundir/$sample/logs/$sample\_htseq.done","$rundir/logs/PipelineCheck.log");
   		print HT "module unload python/2.7.10\n";
   		close HT;
   		if ( $opt{mapping} eq "no" ){
@@ -620,24 +667,32 @@ if ( $opt{variantcalling} eq "yes" ){
   #variant annotation
   #snpEff
   my $snpeff_vcf = "$rundir/".basename($rundir).".filtered_variants_snpEff.vcf";
+  my $vc_done = "$rundir/logs/".basename($rundir).".filtered_variants_snpEff.done";
+  my $final_vcf = $snpeff_vcf;
   print VC "if [ -s $filtered_vcf ] && [ ! -s $snpeff_vcf ]\nthen\n\tjava -Xmx15G -Djava.io.tmpdir=\$TMPDIR -jar ".$opt{snpEff_path}."/snpEff.jar -c ".$opt{snpEff_path}."/snpEff.config $opt{annotate_db} -v $filtered_vcf -hgvs -lof -no-downstream -no-upstream -no-intergenic > $snpeff_vcf\n";
   #igvtools index
-  print VC "\t$opt{igvtools_path} index $snpeff_vcf\n\trm igv.log\n\n";
+  print VC "\t$opt{igvtools_path} index $snpeff_vcf\n\trm igv.log\n";
   print VC "else\n\techo \"ERROR: $filtered_vcf does not exist.\"\nfi\n\n";
 
 
   if ( $SPECIES eq 'HUMAN' ){
   	#SnpSift
   	my $snpsift_vcf = "$rundir/".basename($rundir).".filtered_variants_snpEff_snpSift.vcf";
+    $final_vcf = $snpsift_vcf;
   	my $snpsift_fields = "hg38_chr,hg38_pos,genename,Uniprot_acc,Uniprot_id,Uniprot_aapos,Interpro_domain,cds_strand,refcodon,SLR_test_statistic,codonpos,fold-degenerate,Ancestral_allele,Ensembl_geneid,Ensembl_transcriptid,aapos,aapos_SIFT,aapos_FATHMM,SIFT_score,SIFT_converted_rankscore,SIFT_pred,Polyphen2_HDIV_score,Polyphen2_HDIV_rankscore,Polyphen2_HDIV_pred,Polyphen2_HVAR_score,Polyphen2_HVAR_rankscore,Polyphen2_HVAR_pred,LRT_score,LRT_converted_rankscore,LRT_pred,MutationTaster_score,MutationTaster_converted_rankscore,MutationTaster_pred,MutationAssessor_score,MutationAssessor_rankscore,MutationAssessor_pred,FATHMM_score,FATHMM_rankscore,FATHMM_pred,MetaSVM_score,MetaSVM_rankscore,MetaSVM_pred,MetaLR_score,MetaLR_rankscore,MetaLR_pred,Reliability_index,VEST3_score,VEST3_rankscore,PROVEAN_score,PROVEAN_converted_rankscore,PROVEAN_pred,CADD_raw,CADD_raw_rankscore,CADD_phred,GERP++_NR,GERP++_RS,GERP++_RS_rankscore,phyloP46way_primate,phyloP46way_primate_rankscore,phyloP46way_placental,phyloP46way_placental_rankscore,phyloP100way_vertebrate,phyloP100way_vertebrate_rankscore,phastCons46way_primate,phastCons46way_primate_rankscore,phastCons46way_placental,phastCons46way_placental_rankscore,phastCons100way_vertebrate,phastCons100way_vertebrate_rankscore,SiPhy_29way_pi,SiPhy_29way_logOdds,SiPhy_29way_logOdds_rankscore,LRT_Omega,UniSNP_ids,1000Gp1_AC,1000Gp1_AF,1000Gp1_AFR_AC,1000Gp1_AFR_AF,1000Gp1_EUR_AC,1000Gp1_EUR_AF,1000Gp1_AMR_AC,1000Gp1_AMR_AF,1000Gp1_ASN_AC,1000Gp1_ASN_AF,ESP6500_AA_AF,ESP6500_EA_AF,ARIC5606_AA_AC,ARIC5606_AA_AF,ARIC5606_EA_AC,ARIC5606_EA_AF,ExAC_AC,ExAC_AF,ExAC_Adj_AC,ExAC_Adj_AF,ExAC_AFR_AC,ExAC_AFR_AF,ExAC_AMR_AC,ExAC_AMR_AF,ExAC_EAS_AC,ExAC_EAS_AF,ExAC_FIN_AC,ExAC_FIN_AF,ExAC_NFE_AC,ExAC_NFE_AF,ExAC_SAS_AC,ExAC_SAS_AF,clinvar_rs,clinvar_clnsig,clinvar_trait,COSMIC_ID,COSMIC_CNT";
   	print VC "if [ -s $snpeff_vcf ] && [ ! -s $snpsift_vcf ]\nthen\n\tjava -Xmx15G -Djava.io.tmpdir=\$TMPDIR -jar ".$opt{snpEff_path}."/SnpSift.jar dbnsfp -v -f $snpsift_fields -db $opt{dbnsfp_path} $snpeff_vcf > $snpsift_vcf\n";
   	#igvtools index
   	print VC "\t$opt{igvtools_path} index $snpsift_vcf\n\trm igv.log\n\n";
   	print VC "else\n\techo \"ERROR: $snpeff_vcf does not exist.\"\nfi\n\n";
   	print VC "if [ -s $snpsift_vcf ]\nthen\n\trm $snpeff_vcf $snpeff_vcf.idx\nfi\n\n";
+    $vc_done = "$rundir/logs/".basename($rundir).".filtered_variants_snpEff_snpSift.done";
   }
+  print VC "if [ -s $final_vcf ]; then touch $vc_done;fi\n";
+  print CHECK checkDone("VARIANTCALLING",$final_vcf,$vc_done,"$rundir/logs/PipelineCheck.log");
+  close VC;
   my $hold_line = join ',',@hold_mapping_ids;
   print QSUB "\n##Variant Calling\nqsub -P $opt{sgeProjectName} -l h_vmem=20G -pe threaded 4 -l h_rt=168:0:0 -o $rundir/logs -e $rundir/logs -R yes -N $variantcalling_job_id -hold_jid $hold_line $rundir/jobs/$variantcalling_job_id.sh\n\n";
+  push (@hold_ids, $variantcalling_job_id);
 }
 
 if ( $opt{count} eq "yes" ){
@@ -650,8 +705,12 @@ if ( $opt{count} eq "yes" ){
   print MT "module load R/3.2.2\n";
   mergeRscript($rundir);
   print MT "time R --save --no-init-file < $rundir/jobs/merge.R\n";
+  my $mt_done = "$rundir/logs/".basename($rundir)."_readCounts_raw.done";
+  print MT "if [ -s $rundir/read_counts/".basename($rundir)."_readCounts_raw.txt ]; then touch $mt_done; fi\n";
+
   print MT "module unload R/3.2.2\n";
   close MT;
+  print CHECK checkDone("MERGE COUNTS","$rundir/read_counts/".basename($rundir)."_readCounts_raw.txt",$mt_done,"$rundir/logs/PipelineCheck.log");
   my $hold_line = join ',',@hold_ids;
   if ( $hold_line eq '' ){
     print QSUB "\n##Merge HTSeq-count tables\nqsub -P $opt{sgeProjectName} -l h_rt=02:00:00 -o $rundir/logs -e $rundir/logs -R yes -N $mergeTables_job_id $rundir/jobs/$mergeTables_job_id.sh\n\n";
@@ -671,14 +730,20 @@ if ( $opt{normalize} eq "yes"){
   print NM "module load R/3.2.2\n";
   normalizeRscript($rundir);
   print NM "time R --save --no-init-file < $rundir/jobs/normalize.R\n";
+
+  my $nm_done = "$rundir/logs/".basename($rundir)."_readCounts_normalized.done";
+  print NM "if [ -s $rundir/read_counts/".basename($rundir)."_readCounts_normalized.txt ]; then touch $nm_done; fi\n";
+
   print NM "module unload R/3.2.2\n";
   close NM;
+  print CHECK checkDone("NORMALIZE COUNTS","$rundir/read_counts/".basename($rundir)."_readCounts_normalized.txt",$nm_done,"$rundir/logs/PipelineCheck.log");
   my $hold_line = join ',',@hold_ids;
   if ( $hold_line eq '' ){
     print QSUB "\n##Normalize counts table\nqsub -P $opt{sgeProjectName} -l h_rt=02:00:00 -o $rundir/logs -e $rundir/logs -R yes -N $normTables_job_id $rundir/jobs/$normTables_job_id.sh\n\n";
   } else {
     print QSUB "\n##Normalize counts table\nqsub -P $opt{sgeProjectName} -l h_rt=02:00:00 -o $rundir/logs -e $rundir/logs -R yes -N $normTables_job_id -hold_jid $hold_line $rundir/jobs/$normTables_job_id.sh\n\n";
   }
+  push(@hold_ids, $normTables_job_id);
 }
 
 if( $opt{rpkm} eq "yes"){
@@ -691,14 +756,20 @@ if( $opt{rpkm} eq "yes"){
   print RP "module load R/3.2.2\n";
   rpkmRscript($rundir);
   print RP "time R --save --no-init-file --args $rundir < $rundir/jobs/rpkm.R\n";
+
+  my $rp_done = "$rundir/logs/".basename($rundir)."_readCounts_RPKM.done";
+  print RP "if [ -s $rundir/read_counts/".basename($rundir)."_readCounts_RPKM.txt ]; then touch $rp_done; fi\n";
+
   print RP "module unload R/3.2.2\n";
   close RP;
+  print CHECK checkDone("RPKM COUNTS","$rundir/read_counts/".basename($rundir)."_readCounts_RPKM.txt",$rp_done,"$rundir/logs/PipelineCheck.log");
   my $hold_line = join ',',@hold_ids;
   if ( $hold_line eq '' ){
     print QSUB "\n##Calculate RPKMs\nqsub -P $opt{sgeProjectName} -l h_rt=02:00:00 -o $rundir/logs -e $rundir/logs -R yes -N $rpkm_job_id $rundir/jobs/$rpkm_job_id.sh\n\n";
   } else {
     print QSUB "\n##Calculate RPKMs\nqsub -P $opt{sgeProjectName} -l h_rt=02:00:00 -o $rundir/logs -e $rundir/logs -R yes -N $rpkm_job_id -hold_jid $hold_line $rundir/jobs/$rpkm_job_id.sh\n\n";
   }
+  push(@hold_ids, $rpkm_job_id);
 }
 
 if ( $opt{de} eq "yes"){
@@ -719,12 +790,14 @@ if ( $opt{de} eq "yes"){
   } else {
     print QSUB "\n##Perform DE analysis\nqsub -P $opt{sgeProjectName} -l h_rt=02:00:00 -o $rundir/logs -e $rundir/logs -R yes -N $de_job_id -hold_jid $hold_line $rundir/jobs/$de_job_id.sh\n\n";
   }
+  push(@hold_ids, $de_job_id);
 }
 
 if ( $opt{bamqc} eq "yes"){
   #invoke bamMetrics
   my ($bamQC_job_id) = ("bamQC_".get_job_id());
   push (@hold_ids, $bamQC_job_id);
+  push (@hold_ids, "bamMetrics_report_$runname");
   open BQ, ">$rundir/jobs/$bamQC_job_id.sh";
   print BQ "\#!/bin/bash\n\n";
   print BQ "uname -n > $rundir/logs/$bamQC_job_id.host\n";
@@ -746,7 +819,11 @@ if ( $opt{bamqc} eq "yes"){
   elsif ( $paired==1 ){
     print BQ "perl $opt{bamstats_path} -bam ".join(" -bam ",@final_bams)." -queue_threads 2 -queue_project $opt{sgeProjectName} -picard_path $opt{picard_path} -debug -rna -ref_flat $opt{refflat_file} -ribosomal_intervals $opt{intervallist} -strand $picard_strand -genome $opt{fasta} -run_name $runname -output_dir $rundir/bamMetrics\n\n";
   }
+
+  # print BQ "if [ -s $rundir/bamMetrics/$runname.bamMetrics.pdf ]; then touch $rundir/logs/".basename($rundir).".bamMetrics.done; fi\n";
+
   close BQ;
+
   if ( $opt{mapping} eq "no" ){
     print QSUB "\n##bamQC\nqsub -P $opt{sgeProjectName} -l h_rt=02:00:00 -o $rundir/logs -e $rundir/logs -R yes -N $bamQC_job_id $rundir/jobs/$bamQC_job_id.sh\n\n";
   }else{
@@ -755,21 +832,54 @@ if ( $opt{bamqc} eq "yes"){
   }
 
   #cleaning
-  print CL "if [ -f $rundir/bamMetrics/$runname.bamMetrics.pdf ]; then rm -r $rundir/bamMetrics/tmp; fi\n";
-  close CL;
+  print CHECK "if [ -f $rundir/bamMetrics/$runname.bamMetrics.pdf ]; then rm -r $rundir/bamMetrics/tmp; touch $rundir/logs/".basename($rundir).".bamMetrics.done; fi\n";
+  print CHECK checkDone("BAMMETRICS","$rundir/bamMetrics/".basename($rundir).".bamMetrics.pdf","$rundir/logs/".basename($rundir).".bamMetrics.done","$rundir/logs/PipelineCheck.log");
 }
 
 close SETTINGS;
 
 my $hold_line = join ',',@hold_ids;
-print QSUB "\n##cleaning\nqsub -P $opt{sgeProjectName} -l h_rt=02:00:00 -o $rundir/logs -e $rundir/logs -R yes -N $clean_job_id -hold_jid $hold_line $rundir/jobs/$clean_job_id.sh\n\n";
-close QSUB;
+
+print CHECK "if [ \$failed = true ]\n";
+print CHECK "then\n";
+print CHECK "\techo 'One or multiple step(s) of the pipeline failed. ' >> $rundir/logs/PipelineCheck.log\n";
+print CHECK "\tmail -s 'RNAseq analysis FAILED ".basename($rundir)."' '".$opt{mail}."' < $rundir/logs/PipelineCheck.log\n";
+print CHECK "else\n";
+print CHECK "\techo 'RNAseq analysis DONE. ' >> $rundir/logs/PipelineCheck.log\n";
+print CHECK "\tmail -s 'RNAseq analysis succesful ".basename($rundir)."' '".$opt{mail}."' < $rundir/logs/PipelineCheck.log\n";
+print CHECK "fi\n";
+print CHECK "sleep 5\n";
 close CHECK;
+
+print QSUB "\n##check & cleaning\nqsub -P $opt{sgeProjectName} -l h_rt=02:00:00 -o $rundir/logs -e $rundir/logs -R yes -N $check_job_id -hold_jid $hold_line $rundir/jobs/$check_job_id.sh\n\n";
+close QSUB;
+
+
+
 system "sh $mainJobID" unless $opt{debug};
 
 
 
 ## SUBROUTINES ##
+
+sub checkDone{
+  my $step_name = shift;
+  my $file_name = shift;
+  my $done_file = shift;
+  my $log_file = shift;
+
+  my $check = "";
+  $check .= "if [ -f $done_file ]; then\n";
+  $check .= "\techo '$step_name for $file_name : done' >> $log_file\n";
+	$check .= "else\n";
+  $check .= "\techo '$step_name for $file_name : failed' >> $log_file\n";
+  $check .= "\tfailed=true\n";
+  $check .= "fi\n\n";
+
+  return $check;
+
+}
+
 sub checkDesign{
   my $designfile = shift;
   my $status = 'good';
