@@ -516,7 +516,7 @@ foreach my $sample (keys %{$samples}) {
   print MAPPING_SH "FASTQS=".join(",",$rest_fastqs,$R1_fastqs)."\n";
   print MAPPING_SH "IFS=', ' read -r -a FASTQ_LIST <<< \$FASTQS\n";
   print MAPPING_SH "READS_INPUT=0\n";
-  print MAPPING_SH "for FQ in \$FASTQ_LIST; do READ_COUNT=\$(zgrep -P '\@' \$FQ | wc -l); READS_INPUT=\$((\$READS_INPUT+\$READ_COUNT)); done\n";
+  print MAPPING_SH "for FQ in \${FASTQ_LIST[@]}; do READ_COUNT=\$(zgrep -P '\@' \$FQ | wc -l); READS_INPUT=\$((\$READS_INPUT+\$READ_COUNT)); done\n";
   print MAPPING_SH "if [[ \$READS_LOG -eq \$READS_INPUT ]];then touch $rundir/$sample/logs/$sample\_sort.done;fi\n";
 
   print CHECK checkDone("SORT BAM","$rundir/$sample/mapping/$sample\_sort.bam","$rundir/$sample/logs/$sample\_sort.done","$rundir/logs/PipelineCheck.log");
